@@ -2,8 +2,8 @@ use std::vec::Vec;
 use std::mem::size_of;
 use std::convert::TryInto;
 use super::{Objects, Apis};
+use optee_utee::trace_println;
 
-#[derive(Debug)]
 pub enum FuzzerError {
     EndOfInput,
     FailedToCreateObject,
@@ -15,7 +15,6 @@ type ctor = fn (&Target, &mut Buffer) -> Result<Objects, FuzzerError>;
 type function = fn (&Target, &mut Objects, &mut Buffer) -> Result<Objects, FuzzerError>;
 type nonmember_function = fn (&Target, &mut Buffer) -> Result<(), FuzzerError>;
 
-#[derive(Debug)]
 pub struct Api {
     ctors: Vec<ctor>,
     funcs: Vec<function>
@@ -48,7 +47,6 @@ impl Api {
     }
 }
 
-#[derive(Debug)]
 pub struct Target {
     apis: Vec<Api>,
     funcs: Vec<nonmember_function>
@@ -83,8 +81,7 @@ impl Target {
     }
 }
 
-#[derive(Debug)]
-struct Buffer<'a> {
+pub struct Buffer<'a> {
     data: &'a [u8],
     it: usize
 }

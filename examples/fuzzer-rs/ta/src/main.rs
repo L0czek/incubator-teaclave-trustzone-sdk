@@ -105,6 +105,7 @@ fn start_fuzzing() {
             trace_println!("Error while fuzzing: {:?}", err);
         }
     }
+    fuzzer::exit(0i8);
 }
 
 fn run_testcase(tc: &[u8]) {
