@@ -193,6 +193,11 @@ impl<'a> CodeGenerator<'a> {
                 #imports
                 #target
 
+                pub fn fuzz(tc: &[u8]) -> Result<(), FuzzerError> {
+                    let target = compile();
+                    let mut buffer = Buffer::new(tc);
+                    target.fuzz(&mut buffer)
+                }
             }
         }
     }

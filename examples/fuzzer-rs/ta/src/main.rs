@@ -39,7 +39,9 @@ impl A {
         Self { a: 1 }
     }
 
-    pub fn b(&self) {}
+    pub fn b(&self, a: i32) {
+        trace_println!("fuzzing: {}", a);
+    }
 }
 
 dsl::target! {
@@ -54,7 +56,7 @@ dsl::target! {
                     Ok A::new()
                 }
                 functions {
-                    b()
+                    b(#Eval(x as i32 for x = #U32))
                 }
             }
         }
@@ -100,7 +102,9 @@ fn start_fuzzing() {
     }
     fuzzer::log("Starting fuzzer...");
 
-    if let Err(err) = fuzzer::run(|tc| ()) {
+    if let Err(err) = fuzzer::run(|tc| {
+        test::fuzz(tc);
+    }) {
         unsafe {
             trace_println!("Error while fuzzing: {:?}", err);
         }
