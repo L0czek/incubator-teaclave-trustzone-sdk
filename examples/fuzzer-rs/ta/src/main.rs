@@ -30,6 +30,15 @@ use proto::Command;
 mod fuzzer;
 
 #[derive(Debug)]
+struct B {}
+
+impl B {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+#[derive(Debug)]
 struct A {
     a: i32,
 }
@@ -42,29 +51,40 @@ impl A {
     pub fn b(&self, a: i32) {
         trace_println!("fuzzing: {}", a);
     }
+
+    pub fn c(&self, v: &B) {}
 }
 
 dsl::target! {
     test [] {
         use {
-            super::A
+            super::A,
+            super::B
         }
 
         Apis {
             A {
                 ctors {
-                    Ok A::new()
+                    Ok A::new() -> A
                 }
                 functions {
-                    b(#Eval(x as i32 for x = #U32))
+                    b(#Eval(x as i32 for x = #U32)) -> (),
+                    c(ref #Api(B)) -> ()
                 }
+            },
+            B {
+                ctors {
+                    Ok B::new() -> B
+                }
+                functions {}
             }
         }
         Functions {
-            A::new()
+            A::new() -> A
         }
     }
 }
+
 
 #[ta_create]
 fn create() -> Result<()> {

@@ -19,6 +19,7 @@ mod keywords {
     custom_keyword!(RandomVector);
     custom_keyword!(Ok);
     custom_keyword!(trace);
+    custom_keyword!(tcgen);
     custom_keyword!(UsizeArray);
     custom_keyword!(Apis);
     custom_keyword!(Functions);
@@ -202,6 +203,7 @@ pub(super) struct Function {
     pub wrap_ok: Option<keywords::Ok>,
     pub name: Path,
     pub params: Punctuated<Box<Expression>, Token![,]>,
+    pub retval: Expr
 }
 
 impl Parse for Function {
@@ -211,12 +213,14 @@ impl Parse for Function {
         let name = input.parse()?;
         let params;
         parenthesized!(params in input);
+        input.parse::<Token![->]>()?;
 
         Ok(Self {
             assign_self,
             wrap_ok,
             name,
             params: Punctuated::parse_terminated(&params)?,
+            retval: input.parse()?
         })
     }
 }
@@ -310,6 +314,7 @@ impl Parse for Imports {
 #[derive(Debug)]
 pub(super) struct Options {
     pub trace: bool,
+    pub tcgen: bool
 }
 
 impl Parse for Options {
@@ -318,19 +323,23 @@ impl Parse for Options {
         bracketed!(opts in input);
 
         let mut trace: bool = false;
+        let mut tcgen: bool = false;
 
         while !opts.is_empty() {
             let look = opts.lookahead1();
 
             if look.peek(keywords::trace) {
-                opts.parse::<Token![use]>()?;
+                opts.parse::<keywords::trace>()?;
                 trace = true;
+            } else if look.peek(keywords::tcgen) {
+                opts.parse::<keywords::tcgen>()?;
+                tcgen = true;
             } else {
                 return Err(look.error());
             }
         }
 
-        Ok(Self { trace })
+        Ok(Self { trace, tcgen })
     }
 }
 

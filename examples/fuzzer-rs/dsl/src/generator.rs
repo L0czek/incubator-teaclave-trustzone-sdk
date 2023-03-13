@@ -1,15 +1,15 @@
 use std::{fs, path::PathBuf, str::FromStr};
 
-use crate::parser::{Expression, Function, Target, ImportLine, Api};
-use proc_macro::TokenStream;
+use crate::{parser::{Expression, Function, Target, ImportLine, Api}, tcgen::TcGenerator};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, TokenStreamExt, ToTokens};
-use syn::{Ident, parse_file, File};
+use syn::{Ident, parse_file, File, token};
 
 #[derive(Debug)]
-struct ExpressionCompiler {
+pub(super) struct ExpressionCompiler {
     it: usize,
     tokens: TokenStream2,
+    post: TokenStream2
 }
 
 impl ExpressionCompiler {
@@ -17,6 +17,7 @@ impl ExpressionCompiler {
         Self {
             it: 0usize,
             tokens: TokenStream2::new(),
+            post: TokenStream2::new()
         }
     }
 
@@ -24,6 +25,10 @@ impl ExpressionCompiler {
         let name = format!("__var_{}", self.it);
         self.it += 1;
         Ident::new(&name, Span::call_site())
+    }
+
+    pub fn to_code(self) -> (TokenStream2, TokenStream2) {
+        (self.tokens, self.post)
     }
 
     pub fn compile_expr(&mut self, expr: &Expression) -> Ident {
@@ -76,11 +81,25 @@ impl ExpressionCompiler {
                     }
                 }
             }
-            Expression::Api(name) => quote! {
-                if let Objects::#name(__o) = target.api(Apis::#name, buffer)? {
-                    __o
-                } else {
-                    return Err(FuzzerError::ObjectIsOfInvalidType)
+            Expression::Api(name) => {
+                self.post.append_all(quote! {
+                    buffer.add_cache(Apis::#name, Box::new(Objects::#name(#label)));
+                });
+
+                quote! {
+                    {
+                        let idx = buffer.get_u8()? as usize;
+                        let mut __o__ = buffer.get_cache(&Apis::#name, idx);
+                        if let None = __o__ {
+                            target.fuzz_api(Apis::#name, buffer)?;
+                            __o__ = buffer.get_cache(&Apis::#name, idx);
+                        }
+                        if let Objects::#name(__o) = *__o__.unwrap() {
+                            __o
+                        } else {
+                            return Err(FuzzerError::ObjectIsOfInvalidType)
+                        }
+                    }
                 }
             },
             Expression::EmptyVector => quote! { std::vec::Vec::new() },
@@ -180,6 +199,7 @@ impl<'a> CodeGenerator<'a> {
         let enums = self.generate_enums();
         let target = self.generate_target();
         let internal = self.generate_internal_module();
+        let tcgen = self.generate_tc_generator();
 
         quote! {
             mod #name {
@@ -198,7 +218,19 @@ impl<'a> CodeGenerator<'a> {
                     let mut buffer = Buffer::new(tc);
                     target.fuzz(&mut buffer)
                 }
+
+                #tcgen
             }
+        }
+    }
+
+    fn generate_tc_generator(&self) -> TokenStream2 {
+        if self.target.opts.tcgen {
+            TcGenerator::new(&self.target)
+                .generate()
+                .into()
+        } else {
+            quote! {}
         }
     }
 
@@ -215,7 +247,7 @@ impl<'a> CodeGenerator<'a> {
                 None
             }
 
-            #[derive(Debug)]
+            #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
             pub enum Apis {
                 #(#names = #indexes),*
             }
@@ -314,13 +346,15 @@ impl<'a> CodeGenerator<'a> {
             }
         };
         let (trace_begin, trace_end) = self.generate_trace(None, func, &params);
+        let (init, deinit) = compiler.to_code();
 
         quote! {
             |target: &Target, buffer: &mut Buffer| {
-                #compiler
+                #init
                 #trace_begin
                 let ret = #ctor(#(#params),*);
                 #trace_end
+                #deinit
                 #unpack_obj
             }
         }
@@ -343,14 +377,16 @@ impl<'a> CodeGenerator<'a> {
         };
 
         let (trace_begin, trace_end) = self.generate_trace(None, func, &params);
+        let (init, deinit) = compiler.to_code();
 
         quote! {
             |target: &Target, obj: &mut Objects, buffer: &mut Buffer| {
                 if let Objects::#api_name(__o) = obj {
-                    #compiler
+                    #init
                     #trace_begin
                     let ret = #api_name::#func_name(__o #(, #params)*);
                     #trace_end
+                    #deinit
                     #return_value
                 } else {
                     unsafe { trace_println!("Passed object type does not match expected {}", stringify!(#api_name)); }
@@ -365,13 +401,15 @@ impl<'a> CodeGenerator<'a> {
         let mut compiler = ExpressionCompiler::new();
         let params: Vec<Ident> = func.params.iter().map(|i| compiler.compile_expr(&i)).collect();
         let (trace_begin, trace_end) = self.generate_trace(None, func, &params);
+        let (init, deinit) = compiler.to_code();
 
         quote! {
             |target: &Target, buffer: &mut Buffer| {
-                #compiler
+                #init
                 #trace_begin
                 let ret = #name(#(#params),*);
                 #trace_end
+                #deinit
                 Ok(())
             }
         }
@@ -380,9 +418,11 @@ impl<'a> CodeGenerator<'a> {
     fn generate_api(&self, api: &Api) -> TokenStream2 {
         let ctors: Vec<TokenStream2> = api.ctors.iter().map(|i| self.generate_ctor(&api.name, i)).collect();
         let functions: Vec<TokenStream2> = api.functions.iter().map(|i| self.generate_member_function(&api.name, i)).collect();
+        let name = &api.name;
 
         quote! {
             Api::new(
+                Apis::#name,
                 vec![
                     #(#ctors),*
                 ],

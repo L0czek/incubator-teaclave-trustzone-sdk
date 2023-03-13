@@ -1,6 +1,8 @@
 use std::vec::Vec;
 use std::mem::size_of;
 use std::convert::TryInto;
+use std::collections::HashMap;
+use std::rc::Rc;
 use super::{Objects, Apis};
 use optee_utee::trace_println;
 
@@ -17,15 +19,16 @@ type nonmember_function = fn (&Target, &mut Buffer) -> Result<(), FuzzerError>;
 
 pub struct Api {
     ctors: Vec<ctor>,
-    funcs: Vec<function>
+    funcs: Vec<function>,
+    api: Apis
 }
 
 impl Api {
-    pub fn new(ctors: Vec<ctor>, funcs: Vec<function>) -> Self {
-        Self { ctors, funcs }
+    pub fn new(api: Apis, ctors: Vec<ctor>, funcs: Vec<function>) -> Self {
+        Self { api, ctors, funcs }
     }
 
-    fn fuzz(&self, target: &Target, buffer: &mut Buffer) -> Result<Objects, FuzzerError> {
+    fn fuzz(&self, target: &Target, buffer: &mut Buffer) -> Result<(), FuzzerError> {
         const MAX_CALLS: usize = 10;
 
         let init = buffer.slice_choice(&self.ctors)?;
@@ -43,7 +46,9 @@ impl Api {
             }
         }
 
-        Ok(obj)
+        buffer.add_cache(self.api, Box::new(obj));
+
+        Ok(())
     }
 }
 
@@ -76,19 +81,37 @@ impl Target {
         }
     }
 
-    pub fn fuzz_api(&self, ident: Apis, buffer: &mut Buffer) -> Result<Objects, FuzzerError> {
+    pub fn fuzz_api(&self, ident: Apis, buffer: &mut Buffer) -> Result<(), FuzzerError> {
         self.api(ident).fuzz(self, buffer)
     }
 }
 
 pub struct Buffer<'a> {
     data: &'a [u8],
-    it: usize
+    it: usize,
+    cache: HashMap<Apis, Vec<Box<Objects>>>
 }
 
 impl<'a> Buffer<'a> {
     pub fn new(buffer: &'a [u8]) -> Self {
-        Self { data: buffer, it: 0usize }
+        Self { data: buffer, it: 0usize, cache: HashMap::new() }
+    }
+
+    pub fn add_cache(&mut self, api: Apis, obj: Box<Objects>) {
+        self.cache.entry(api).or_insert(Vec::new()).push(obj);
+    }
+
+    pub fn get_cache(&mut self, api: &Apis, idx: usize) -> Option<Box<Objects>> {
+        match self.cache.get_mut(api) {
+            None => None,
+            Some(vec) => {
+                if vec.is_empty() {
+                    None
+                } else {
+                    Some(vec.remove(idx % vec.len()))
+                }
+            }
+        }
     }
 
     pub fn slice(&mut self, n: usize) -> Result<&'a [u8], FuzzerError> {
