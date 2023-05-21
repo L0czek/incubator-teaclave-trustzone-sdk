@@ -17,11 +17,24 @@
 
 #![no_main]
 
+use api::Creds;
 use optee_utee::{
     ta_close_session, ta_create, ta_destroy, ta_invoke_command, ta_open_session, trace_println,
 };
 use optee_utee::{Error, ErrorKind, Parameters, Result};
 use proto::Command;
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+
+use crate::api::{Key, Slot, TPM};
+
+mod tpm;
+mod creds;
+mod handler;
+mod request;
+mod serialize;
+mod api;
+mod error;
 
 #[ta_create]
 fn create() -> Result<()> {
@@ -45,19 +58,37 @@ fn destroy() {
     trace_println!("[+] TA destroy");
 }
 
+fn test_api() -> Result<()>{
+    let user = Creds::register("user".to_string(), "user".to_string()).expect("Failed to register user");
+    let _creds = Creds::login("user".to_string(), "user".to_string()).expect("Failed to login");
+
+    let key = Key::new(&user);
+    key.set([1u8;32]);
+
+    let slot = Slot::new().expect("cannot alloc slot");
+    let _data = vec![1,2,3];
+    slot.set(_data.clone()).expect("Cannot save to slot");
+    assert!(slot.get().expect("Cannot read from slot") == _data);
+
+    let tpm = TPM::new();
+    let _secret = vec![5,6,7];
+    tpm.lock(_secret.clone(), &user, &slot).expect("Cannot lock slot");
+
+    let slot2 = Slot::new().expect("Cannot alloc slot");
+    tpm.unlock(_secret.clone(), &user, &slot2).expect("Cannot unlock slot");
+    let _data_read = slot2.get().expect("Cannot read from slot");
+    trace_println!("{:?} == {:?}", _data_read, _data);
+    assert!(_data_read == _data);
+
+    trace_println!("unit test success");
+    Ok(())
+}
+
 #[ta_invoke_command]
 fn invoke_command(cmd_id: u32, params: &mut Parameters) -> Result<()> {
     trace_println!("[+] TA invoke command");
-    let mut values = unsafe { params.0.as_value().unwrap() };
     match Command::from(cmd_id) {
-        Command::IncValue => {
-            values.set_a(values.a() + 100);
-            Ok(())
-        }
-        Command::DecValue => {
-            values.set_a(values.a() - 100);
-            Ok(())
-        }
+        Command::ApiCall => test_api(),
         _ => Err(Error::new(ErrorKind::BadParameters)),
     }
 }

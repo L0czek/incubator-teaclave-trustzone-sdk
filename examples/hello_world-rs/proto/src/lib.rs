@@ -16,8 +16,7 @@
 // under the License.
 
 pub enum Command {
-    IncValue,
-    DecValue,
+    ApiCall = 1,
     Unknown,
 }
 
@@ -25,8 +24,7 @@ impl From<u32> for Command {
     #[inline]
     fn from(value: u32) -> Command {
         match value {
-            0 => Command::IncValue,
-            1 => Command::DecValue,
+            1 => Command::ApiCall,
             _ => Command::Unknown,
         }
     }

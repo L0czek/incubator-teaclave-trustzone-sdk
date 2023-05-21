@@ -40,7 +40,7 @@ OUT_DIR := $(CURDIR)/target/$(TARGET)/release
 all: ta strip sign
 
 ta:
-	@xargo build --target $(TARGET) --release --verbose
+	@xargo build --target $(TARGET) --release --verbose -Z namespaced-features
 
 strip:
 	@$(OBJCOPY) --strip-unneeded $(OUT_DIR)/ta $(OUT_DIR)/stripped_ta

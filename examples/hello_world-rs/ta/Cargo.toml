@@ -29,6 +29,8 @@ libc = { path = "../../../rust/libc" }
 proto = { path = "../proto" }
 optee-utee-sys = { path = "../../../optee-utee/optee-utee-sys" }
 optee-utee = { path = "../../../optee-utee" }
+lazy_static = "1.4.0"
+
 
 [build_dependencies]
 uuid = { version = "0.8" }
