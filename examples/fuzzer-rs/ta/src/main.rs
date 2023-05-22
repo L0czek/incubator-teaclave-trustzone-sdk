@@ -27,10 +27,11 @@ use optee_utee::{
 use optee_utee::{Error, ErrorKind, Parameters, Result};
 use proto::Command;
 
+mod fuzz_target;
 mod fuzzer;
 
 #[derive(Debug)]
-struct B {}
+pub struct B {}
 
 impl B {
     pub fn new() -> Self {
@@ -39,7 +40,7 @@ impl B {
 }
 
 #[derive(Debug)]
-struct A {
+pub struct A {
     a: i32,
 }
 
