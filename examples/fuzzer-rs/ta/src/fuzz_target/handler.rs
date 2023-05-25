@@ -1,14 +1,13 @@
-use std::{collections::hash_map::HashMap, convert::TryInto};
 use std::hash::Hash;
 use std::string::String;
 use std::vec::Vec;
+use std::{collections::hash_map::HashMap, convert::TryInto};
 
-use optee_utee::{Digest, AttributeMemref, trace_println};
+use optee_utee::{trace_println, AttributeMemref, Digest};
 
 use super::error::Error;
-use super::serialize::*;
 use super::request::*;
-
+use super::serialize::*;
 
 #[derive(Hash, Eq, PartialEq)]
 struct UserData {
@@ -22,7 +21,7 @@ pub(super) struct Handler {
     slots: HashMap<usize, Vec<u8>>,
     data: HashMap<[u8; 32], Vec<u8>>,
     uids: usize,
-    sids: usize
+    sids: usize,
 }
 
 impl Handler {
@@ -33,12 +32,13 @@ impl Handler {
             slots: HashMap::new(),
             data: HashMap::new(),
             uids: 0usize,
-            sids: 0usize
+            sids: 0usize,
         }
     }
 
     fn hash(&self, data: &[u8]) -> [u8; 32] {
-        let digets = Digest::allocate(optee_utee::AlgorithmId::Sha256).expect("Cannot allocate sha256");
+        let digets =
+            Digest::allocate(optee_utee::AlgorithmId::Sha256).expect("Cannot allocate sha256");
         let mut ret = [0u8; 32];
         digets.do_final(data, &mut ret);
         ret
@@ -55,19 +55,24 @@ impl Handler {
     }
 
     pub fn handle(&mut self, request: &Request) -> Response {
-
         match request {
             Request::UserLogin(user, pass) => {
-                let user = UserData { user: user.clone(), pass: pass.clone() };
+                let user = UserData {
+                    user: user.clone(),
+                    pass: pass.clone(),
+                };
                 let entry = self.uid.get(&user);
 
                 match entry {
                     Some(id) => Response::Id(*id),
-                    None => Response::Err(Error::InvalidCredentials)
+                    None => Response::Err(Error::InvalidCredentials),
                 }
-            },
+            }
             Request::UserRegster(user, pass) => {
-                let user = UserData { user: user.clone(), pass: pass.clone() };
+                let user = UserData {
+                    user: user.clone(),
+                    pass: pass.clone(),
+                };
                 self.uid.insert(user, self.uids);
                 let id = self.uids;
                 self.uids += 1;
@@ -97,9 +102,7 @@ impl Handler {
                 *self.slots.get_mut(id).unwrap() = data.to_owned();
                 Response::Ok
             }
-            Request::GetFromSlot(id) => {
-                Response::Data(self.slots.get(id).unwrap().to_owned())
-            }
+            Request::GetFromSlot(id) => Response::Data(self.slots.get(id).unwrap().to_owned()),
             Request::FreeSlot(id) => {
                 self.slots.remove(id);
                 Response::Ok
@@ -111,7 +114,13 @@ impl Handler {
                 mac.extend(hash.iter());
                 mac.extend(self.keys.get(uid).expect("Failed to get user key"));
                 let id = self.hash(mac.as_slice());
-                self.data.insert(id, self.slots.get(slotid).expect("Failed to get slot").to_owned());
+                self.data.insert(
+                    id,
+                    self.slots
+                        .get(slotid)
+                        .expect("Failed to get slot")
+                        .to_owned(),
+                );
                 Response::Ok
             }
             Request::TpmUnlock(data, uid, slotid) => {
@@ -125,6 +134,5 @@ impl Handler {
                 Response::Ok
             }
         }
-
     }
 }

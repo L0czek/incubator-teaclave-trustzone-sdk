@@ -45,11 +45,11 @@ impl ExpressionCompiler {
             }
             Expression::Vector(size) => {
                 let size = self.compile_expr(&size);
-                quote! { buffer.vec(#size as usize) }
+                quote! { buffer.vec(#size as usize)? }
             }
             Expression::Slice(size) => {
                 let size = self.compile_expr(&size);
-                quote! { buffer.slice(#size as usize) }
+                quote! { buffer.slice(#size as usize)? }
             }
             Expression::Eval(eval) => {
                 let values: Vec<Ident> = eval
@@ -151,12 +151,21 @@ impl ExpressionCompiler {
             Expression::Str(size) => {
                 let size = self.compile_expr(&size);
 
-                quote! { unsafe { core::str::from_utf8_unchecked(buffer.slice(#size as usize)?) } }
+                quote! {
+                    std::str::from_utf8(buffer.slice(#size as usize)?)
+                        .map_err(|_| FuzzerError::Utf8Decoding)?
+                        .to_string()
+                }
             }
             Expression::StaticStr(size) => {
                 let size = self.compile_expr(&size);
 
                 quote! { unsafe { core::mem::transmute<&str, &'static str>(core::str::from_utf8_unchecked(buffer.slice(#size as usize)?)) } }
+            }
+            Expression::TPMKey() => {
+                quote! {
+                    buffer.slice(32)?.try_into().unwrap()
+                }
             }
         };
 
@@ -312,18 +321,24 @@ impl<'a> CodeGenerator<'a> {
             func_name.clone().into_token_stream().to_string()
         };
 
-        let fmt: String = [
-            "[[TRACE]] [{}] : ",
+        let fmt1: String = [
+            "[[TRACE]] [BEGIN] : ",
             name.as_str(),
             "(",
             args_fmt.as_str(),
             ")",
+            " => <unfinished>"
+        ].into_iter().collect();
+
+        let fmt2: String = [
+            "[[TRACE]] [END] : ",
+            name.as_str(),
             " => {:?}"
         ].into_iter().collect();
 
         (
-            quote! { unsafe { trace_println!(#fmt, "BEGIN" #(, #params)*, "<unfinished>"); } },
-            quote! { unsafe { trace_println!(#fmt, "END" #(, #params)*, ret) } }
+            quote! { unsafe { trace_println!(#fmt1 #(, &#params)*); } },
+            quote! { unsafe { trace_println!(#fmt2, ret) } }
         )
     }
 
@@ -376,7 +391,7 @@ impl<'a> CodeGenerator<'a> {
             quote! { Ok(Objects::None) }
         };
 
-        let (trace_begin, trace_end) = self.generate_trace(None, func, &params);
+        let (trace_begin, trace_end) = self.generate_trace(Some(api_name), func, &params);
         let (init, deinit) = compiler.to_code();
 
         quote! {

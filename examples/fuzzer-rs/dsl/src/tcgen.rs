@@ -71,6 +71,7 @@ impl ExpressionReverser {
             Expression::Mod(a, _) => self.reverse_expr(val, &a),
             Expression::Str(size) => self.reverse_len(val, &size),
             Expression::StaticStr(size) => self.reverse_len(val, &size),
+            Expression::TPMKey() => self.assign(quote! { &val as &[u8] }),
         }
     }
 }

@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-pub(super) enum Error {
+pub enum Error {
     InvalidCredentials = 1,
     NoSuchKey = 2,
     InvalidEnum = 3,
@@ -20,8 +20,7 @@ impl TryInto<Error> for u32 {
             x if x == Error::DeserializeEndOfInput as u32 => Ok(Error::DeserializeEndOfInput),
             x if x == Error::InvalidResponse as u32 => Ok(Error::InvalidResponse),
 
-            _ => Err(Error::InvalidEnum)
+            _ => Err(Error::InvalidEnum),
         }
-
     }
 }

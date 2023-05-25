@@ -1,4 +1,4 @@
-use syn::{parse::Parse, punctuated::Punctuated, *};
+use syn::{parse::Parse, punctuated::Punctuated, *, token::parsing::keyword};
 
 mod keywords {
     use syn::custom_keyword;
@@ -29,6 +29,7 @@ mod keywords {
     custom_keyword!(AssignSelf);
     custom_keyword!(StaticStr);
     custom_keyword!(Str);
+    custom_keyword!(TPMKey);
 }
 
 #[derive(Debug)]
@@ -89,6 +90,7 @@ pub(super) enum Expression {
     Mod(Box<Expression>, Box<Expression>),
     StaticStr(Box<Expression>),
     Str(Box<Expression>),
+    TPMKey()
 }
 
 impl Parse for Expression {
@@ -180,6 +182,9 @@ impl Parse for Expression {
                 let content;
                 parenthesized!(content in input);
                 Ok(Self::Str(content.parse()?))
+            } else if look.peek(keywords::TPMKey) {
+                input.parse::<keywords::TPMKey>()?;
+                Ok(Self::TPMKey())
             } else {
                 Err(look.error())
             }

@@ -11,6 +11,7 @@ pub enum FuzzerError {
     FailedToCreateObject,
     ObjectIsOfInvalidType,
     EmptySliceThereIsNoChoice,
+    Utf8Decoding,
 }
 
 type ctor = fn (&Target, &mut Buffer) -> Result<Objects, FuzzerError>;
@@ -29,7 +30,7 @@ impl Api {
     }
 
     fn fuzz(&self, target: &Target, buffer: &mut Buffer) -> Result<(), FuzzerError> {
-        const MAX_CALLS: usize = 10;
+        const MAX_CALLS: usize = 2;
 
         let init = buffer.slice_choice(&self.ctors)?;
         let mut obj = init(target, buffer)?;

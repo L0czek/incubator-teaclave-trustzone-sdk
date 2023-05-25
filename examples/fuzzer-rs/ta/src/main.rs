@@ -30,62 +30,58 @@ use proto::Command;
 mod fuzz_target;
 mod fuzzer;
 
-#[derive(Debug)]
-pub struct B {}
-
-impl B {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-#[derive(Debug)]
-pub struct A {
-    a: i32,
-}
-
-impl A {
-    pub fn new() -> Self {
-        Self { a: 1 }
-    }
-
-    pub fn b(&self, a: i32) {
-        trace_println!("fuzzing: {}", a);
-    }
-
-    pub fn c(&self, v: &B) {}
-}
-
 dsl::target! {
-    test [] {
+    test [trace] {
         use {
-            super::A,
-            super::B
+            super::fuzz_target::api::Creds,
+            super::fuzz_target::api::Key,
+            super::fuzz_target::api::Slot,
+            super::fuzz_target::api::TPM
         }
 
         Apis {
-            A {
+            Creds {
                 ctors {
-                    Ok A::new() -> A
-                }
-                functions {
-                    b(#Eval(x as i32 for x = #U32)) -> (),
-                    c(ref #Api(B)) -> ()
-                }
-            },
-            B {
-                ctors {
-                    Ok B::new() -> B
+                    Creds::login(#Str(32), #Str(32)) -> Creds,
+                    Creds::register(#Str(32), #Str(32)) -> Creds
                 }
                 functions {}
+            },
+
+            Key {
+                ctors {
+                    Ok Key::new(ref #Api(Creds)) -> Key
+                }
+                functions {
+                    get() -> (),
+                    set(#TPMKey) -> ()
+                }
+            },
+
+            Slot {
+                ctors {
+                    Slot::new() -> Slot
+                }
+                functions {
+                    set(#Vector(32)) -> (),
+                    get() -> ()
+                }
+            },
+
+            TPM {
+                ctors {
+                    Ok TPM::new() -> TPM
+                }
+                functions {
+                    lock(#Vector(32), ref #Api(Creds), ref #Api(Slot)) -> (),
+                    unlock(#Vector(32), ref #Api(Creds), ref #Api(Slot)) -> ()
+                }
             }
         }
         Functions {
-            A::new() -> A
         }
     }
 }
-
 
 #[ta_create]
 fn create() -> Result<()> {
@@ -136,6 +132,7 @@ fn start_fuzzing() {
 fn run_testcase(tc: &[u8]) {
     unsafe {
         trace_println!("Fuzzer run testcase: {:?}", tc);
+        test::fuzz(tc);
     }
 }
 

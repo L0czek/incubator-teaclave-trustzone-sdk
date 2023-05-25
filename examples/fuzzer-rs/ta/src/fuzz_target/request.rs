@@ -1,5 +1,5 @@
-use super::serialize::*;
 use super::error::Error;
+use super::serialize::*;
 use std::convert::TryInto;
 
 pub(super) type KeyType = [u8; 32];
@@ -17,7 +17,7 @@ pub(super) enum Request {
     FreeSlot(usize),
 
     TpmLock(Vec<u8>, usize, usize),
-    TpmUnlock(Vec<u8>, usize, usize)
+    TpmUnlock(Vec<u8>, usize, usize),
 }
 
 #[repr(C)]
@@ -34,7 +34,7 @@ enum RequestIds {
     FreeSlot = 8,
 
     TpmLock = 9,
-    TpmUnlock = 10
+    TpmUnlock = 10,
 }
 
 impl Serialize for Request {
@@ -112,29 +112,55 @@ impl TryInto<RequestIds> for u32 {
             x if x == RequestIds::FreeSlot as u32 => Ok(RequestIds::FreeSlot),
             x if x == RequestIds::TpmLock as u32 => Ok(RequestIds::TpmLock),
             x if x == RequestIds::TpmUnlock as u32 => Ok(RequestIds::TpmUnlock),
-            _ => Err(Error::InvalidEnum)
+            _ => Err(Error::InvalidEnum),
         }
     }
 }
 
 impl Deserialize for Request {
-    fn deserialize(deserializer: &mut Deserializer) -> Result<Self, Error> where Self: Sized {
+    fn deserialize(deserializer: &mut Deserializer) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
         let ty: RequestIds = deserializer.pop_u32()?.try_into()?;
 
         match ty {
-            RequestIds::UserLogin => Ok(Request::UserLogin(deserializer.pop_string()?, deserializer.pop_string()?)),
-            RequestIds::UserRegster => Ok(Request::UserRegster(deserializer.pop_string()?, deserializer.pop_string()?)),
+            RequestIds::UserLogin => Ok(Request::UserLogin(
+                deserializer.pop_string()?,
+                deserializer.pop_string()?,
+            )),
+            RequestIds::UserRegster => Ok(Request::UserRegster(
+                deserializer.pop_string()?,
+                deserializer.pop_string()?,
+            )),
 
-            RequestIds::SaveKeyForUser => Ok(Request::SaveKeyForUser(deserializer.pop_usize()?, deserializer.pop_data()?.try_into().map_err(|_| Error::DeserializeEndOfInput)?)),
+            RequestIds::SaveKeyForUser => Ok(Request::SaveKeyForUser(
+                deserializer.pop_usize()?,
+                deserializer
+                    .pop_data()?
+                    .try_into()
+                    .map_err(|_| Error::DeserializeEndOfInput)?,
+            )),
             RequestIds::GetKeyForUser => Ok(Request::GetKeyForUser(deserializer.pop_usize()?)),
 
             RequestIds::AllocSlot => Ok(Request::AllocSlot()),
-            RequestIds::SaveToSlot => Ok(Request::SaveToSlot(deserializer.pop_usize()?, deserializer.pop_data()?)),
+            RequestIds::SaveToSlot => Ok(Request::SaveToSlot(
+                deserializer.pop_usize()?,
+                deserializer.pop_data()?,
+            )),
             RequestIds::GetFromSlot => Ok(Request::GetFromSlot(deserializer.pop_usize()?)),
             RequestIds::FreeSlot => Ok(Request::FreeSlot(deserializer.pop_usize()?)),
 
-            RequestIds::TpmLock => Ok(Request::TpmLock(deserializer.pop_data()?, deserializer.pop_usize()?, deserializer.pop_usize()?)),
-            RequestIds::TpmUnlock => Ok(Request::TpmUnlock(deserializer.pop_data()?, deserializer.pop_usize()?, deserializer.pop_usize()?))
+            RequestIds::TpmLock => Ok(Request::TpmLock(
+                deserializer.pop_data()?,
+                deserializer.pop_usize()?,
+                deserializer.pop_usize()?,
+            )),
+            RequestIds::TpmUnlock => Ok(Request::TpmUnlock(
+                deserializer.pop_data()?,
+                deserializer.pop_usize()?,
+                deserializer.pop_usize()?,
+            )),
         }
     }
 }
@@ -144,7 +170,7 @@ pub(super) enum Response {
     Data(Vec<u8>),
     Id(usize),
     Ok,
-    Err(Error)
+    Err(Error),
 }
 
 enum ResponseId {
@@ -152,7 +178,7 @@ enum ResponseId {
     Data = 2,
     Id = 3,
     Ok = 4,
-    Err = 5
+    Err = 5,
 }
 
 impl Serialize for Response {
@@ -195,22 +221,29 @@ impl TryInto<ResponseId> for u32 {
             x if x == ResponseId::Id as u32 => Ok(ResponseId::Id),
             x if x == ResponseId::Err as u32 => Ok(ResponseId::Err),
 
-            _ => Err(Error::InvalidEnum)
+            _ => Err(Error::InvalidEnum),
         }
     }
 }
 
 impl Deserialize for Response {
-    fn deserialize(deserializer: &mut Deserializer) -> Result<Self, Error> where Self: Sized {
+    fn deserialize(deserializer: &mut Deserializer) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
         let ty: ResponseId = deserializer.pop_u32()?.try_into()?;
 
         match ty {
             ResponseId::Ok => Ok(Response::Ok),
             ResponseId::Id => Ok(Response::Id(deserializer.pop_usize()?)),
-            ResponseId::Key => Ok(Response::Key(deserializer.pop_data()?.try_into().map_err(|_| Error::DeserializeEndOfInput)?)),
+            ResponseId::Key => Ok(Response::Key(
+                deserializer
+                    .pop_data()?
+                    .try_into()
+                    .map_err(|_| Error::DeserializeEndOfInput)?,
+            )),
             ResponseId::Data => Ok(Response::Data(deserializer.pop_data()?)),
-            ResponseId::Err => Ok(Response::Err(deserializer.pop_u32()?.try_into()?))
+            ResponseId::Err => Ok(Response::Err(deserializer.pop_u32()?.try_into()?)),
         }
     }
 }
-
