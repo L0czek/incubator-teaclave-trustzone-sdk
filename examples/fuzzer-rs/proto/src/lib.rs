@@ -16,8 +16,10 @@
 // under the License.
 
 pub enum Command {
-    StartFuzzing,
-    RunTestcase,
+    StartFuzzing = 0,
+    RunTestcase = 1,
+    RunTestcaseWithCoverage = 2,
+    StartFuzzingNoRevert = 3,
     Unknown,
 }
 
@@ -27,6 +29,8 @@ impl From<u32> for Command {
         match value {
             0 => Command::StartFuzzing,
             1 => Command::RunTestcase,
+            2 => Command::RunTestcaseWithCoverage,
+            3 => Command::StartFuzzingNoRevert,
             _ => Command::Unknown,
         }
     }

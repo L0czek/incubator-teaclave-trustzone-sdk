@@ -1,7 +1,6 @@
 use std::arch::asm;
 use std::ptr::null;
 
-use optee_utee::trace_println;
 
 #[derive(Debug)]
 pub enum FuzzerError {

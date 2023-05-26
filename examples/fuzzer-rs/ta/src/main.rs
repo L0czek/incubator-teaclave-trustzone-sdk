@@ -120,6 +120,7 @@ fn start_fuzzing() {
     fuzzer::log("Starting fuzzer...");
 
     if let Err(err) = fuzzer::run(|tc| {
+        trace_println!("Received tc: {:?}", tc);
         test::fuzz(tc);
     }) {
         unsafe {
@@ -136,6 +137,27 @@ fn run_testcase(tc: &[u8]) {
     }
 }
 
+fn run_testcase_with_coverage(tc: &[u8]) {
+    unsafe {
+        trace_println!("Fuzzer run testcase: {:?}", tc);
+        fuzzer::begin();
+        test::fuzz(tc);
+        fuzzer::end();
+    }
+}
+
+fn start_fuzzing_no_revert() {
+    trace_println!("Starting fuzzing with no reverts");
+
+    loop {
+        let tc = fuzzer::fetch_testcase().expect("Cannot fetch testcase");
+        fuzzer::begin();
+        test::fuzz(tc.as_slice());
+        fuzzer::end();
+        fuzzer::exit_no_restore(0i8);
+    }
+}
+
 #[ta_invoke_command]
 fn invoke_command(cmd_id: u32, params: &mut Parameters) -> Result<()> {
     unsafe {
@@ -144,6 +166,8 @@ fn invoke_command(cmd_id: u32, params: &mut Parameters) -> Result<()> {
     match Command::from(cmd_id) {
         Command::StartFuzzing => start_fuzzing(),
         Command::RunTestcase => run_testcase(unsafe { params.0.as_memref() }?.buffer()),
+        Command::RunTestcaseWithCoverage => run_testcase_with_coverage(unsafe { params.0.as_memref() }?.buffer()),
+        Command::StartFuzzingNoRevert => start_fuzzing_no_revert(),
         _ => return Err(Error::new(ErrorKind::BadParameters)),
     };
 
