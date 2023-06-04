@@ -32,18 +32,35 @@ fn main() -> optee_teec::Result<()> {
             arg!(-t --testcase <TESTCASE> "Testcase to check, insted of start fuzzing")
             .required(false)
             .value_parser(value_parser!(String))
+            .exclusive(true)
         )
         .arg(
             arg!(-H --host_fuzzer "Run fuzzer from buildroot")
             .required(false)
             .id("host_fuzzer")
             .action(clap::ArgAction::SetTrue)
+            .exclusive(true)
         )
         .arg(
             arg!(-n --no_reverts "Start fuzzing with no state saving")
             .required(false)
             .id("no_reverts")
             .action(clap::ArgAction::SetTrue)
+            .exclusive(true)
+        )
+        .arg(
+            arg!(-g --generate_testcases "Generate testcases from tests")
+            .required(false)
+            .id("generate")
+            .action(clap::ArgAction::SetTrue)
+            .exclusive(true)
+        )
+        .arg(
+            arg!(-e --exit "Send exit 0 to QEMU")
+            .required(false)
+            .id("exit")
+            .action(clap::ArgAction::SetTrue)
+            .exclusive(true)
         );
 
     let matches = cmd.get_matches();
@@ -54,9 +71,13 @@ fn main() -> optee_teec::Result<()> {
 
     if let Some(testcase) = matches.get_one::<String>("testcase") {
         println!("Run testcase {}", testcase);
-        let p = ParamTmpRef::new_input(testcase.as_bytes());
-        let mut operation = Operation::new(0, p, ParamNone, ParamNone, ParamNone);
-        session.invoke_command(Command::RunTestcase as u32, &mut operation)?;
+        if let Ok(tc) = hex::decode(testcase.as_bytes()) {
+            let p = ParamTmpRef::new_input(tc.as_slice());
+            let mut operation = Operation::new(0, p, ParamNone, ParamNone, ParamNone);
+            session.invoke_command(Command::RunTestcase as u32, &mut operation)?;
+        } else {
+            println!("Failed to decode testcase");
+        }
     } else if matches.get_flag("host_fuzzer") {
         println!("Running fuzzing from buildroot");
 
@@ -70,6 +91,11 @@ fn main() -> optee_teec::Result<()> {
     } else if matches.get_flag("no_reverts") {
         let mut operation = Operation::new(0, ParamNone, ParamNone, ParamNone, ParamNone);
         session.invoke_command(Command::StartFuzzingNoRevert as u32, &mut operation)?;
+    } else if matches.get_flag("generate") {
+        let mut operation = Operation::new(0, ParamNone, ParamNone, ParamNone, ParamNone);
+        session.invoke_command(Command::GenerateTestcases as u32, &mut operation)?;
+    } else if matches.get_flag("exit") {
+        fuzzer::exit(0i8);
     } else {
         println!("Start fuzzing");
         let mut operation = Operation::new(0, ParamNone, ParamNone, ParamNone, ParamNone);

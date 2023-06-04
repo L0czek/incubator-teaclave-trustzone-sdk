@@ -101,6 +101,18 @@ pub fn exit_no_restore(code: i8) {
     }
 }
 
+pub fn save_tc_to_file(name: &str, tc: &[u8]) {
+    unsafe {
+        asm!(
+            "udf 146",
+            in ("x0") name.as_ptr(),
+            in ("x1") name.len(),
+            in ("x2") tc.as_ptr(),
+            in ("x3") tc.len()
+        );
+    }
+}
+
 pub fn run(target: fn(&[u8]) -> ()) -> Result<(), FuzzerError> {
     forkserver();
 

@@ -20,6 +20,7 @@ pub enum Command {
     RunTestcase = 1,
     RunTestcaseWithCoverage = 2,
     StartFuzzingNoRevert = 3,
+    GenerateTestcases = 4,
     Unknown,
 }
 
@@ -31,6 +32,7 @@ impl From<u32> for Command {
             1 => Command::RunTestcase,
             2 => Command::RunTestcaseWithCoverage,
             3 => Command::StartFuzzingNoRevert,
+            4 => Command::GenerateTestcases,
             _ => Command::Unknown,
         }
     }

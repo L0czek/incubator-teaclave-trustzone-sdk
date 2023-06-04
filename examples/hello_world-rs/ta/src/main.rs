@@ -28,8 +28,6 @@ use std::sync::Mutex;
 
 use crate::api::{Key, Slot, TPM};
 
-mod tpm;
-mod creds;
 mod handler;
 mod request;
 mod serialize;

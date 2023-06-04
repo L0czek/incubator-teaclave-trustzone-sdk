@@ -21,6 +21,7 @@
 
 extern crate dsl;
 
+use fuzz_target::api_tcgen;
 use optee_utee::{
     ta_close_session, ta_create, ta_destroy, ta_invoke_command, ta_open_session, trace_println,
 };
@@ -42,8 +43,8 @@ dsl::target! {
         Apis {
             Creds {
                 ctors {
-                    Creds::login(#Str(32), #Str(32)) -> Creds,
-                    Creds::register(#Str(32), #Str(32)) -> Creds
+                    Creds::login(#Str(#Mod(#U8, 32)), #Str(#Mod(#U8, 32))) -> Creds,
+                    Creds::register(#Str(#Mod(#U8, 32)), #Str(#Mod(#U8, 32))) -> Creds
                 }
                 functions {}
             },
@@ -63,7 +64,7 @@ dsl::target! {
                     Slot::new() -> Slot
                 }
                 functions {
-                    set(#Vector(32)) -> (),
+                    set(#Vector(#Mod(#U8, 32))) -> (),
                     get() -> ()
                 }
             },
@@ -73,8 +74,8 @@ dsl::target! {
                     Ok TPM::new() -> TPM
                 }
                 functions {
-                    lock(#Vector(32), ref #Api(Creds), ref #Api(Slot)) -> (),
-                    unlock(#Vector(32), ref #Api(Creds), ref #Api(Slot)) -> ()
+                    lock(#Vector(#Mod(#U8, 32)), ref #Api(Creds), ref #Api(Slot)) -> (),
+                    unlock(#Vector(#Mod(#U8, 32)), ref #Api(Creds), ref #Api(Slot)) -> ()
                 }
             }
         }
@@ -166,8 +167,11 @@ fn invoke_command(cmd_id: u32, params: &mut Parameters) -> Result<()> {
     match Command::from(cmd_id) {
         Command::StartFuzzing => start_fuzzing(),
         Command::RunTestcase => run_testcase(unsafe { params.0.as_memref() }?.buffer()),
-        Command::RunTestcaseWithCoverage => run_testcase_with_coverage(unsafe { params.0.as_memref() }?.buffer()),
+        Command::RunTestcaseWithCoverage => {
+            run_testcase_with_coverage(unsafe { params.0.as_memref() }?.buffer())
+        }
         Command::StartFuzzingNoRevert => start_fuzzing_no_revert(),
+        Command::GenerateTestcases => api_tcgen::tc::run_all_tc(),
         _ => return Err(Error::new(ErrorKind::BadParameters)),
     };
 

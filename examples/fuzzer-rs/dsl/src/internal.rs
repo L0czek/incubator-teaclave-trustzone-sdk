@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use super::{Objects, Apis};
 use optee_utee::trace_println;
+use std::sync::{Mutex, MutexGuard, Arc};
 
 pub enum FuzzerError {
     EndOfInput,
@@ -32,22 +33,40 @@ impl Api {
     fn fuzz(&self, target: &Target, buffer: &mut Buffer) -> Result<(), FuzzerError> {
         const MAX_CALLS: usize = 2;
 
-        let init = buffer.slice_choice(&self.ctors)?;
-        let mut obj = init(target, buffer)?;
+        let idx = buffer.get_u8()? as usize;
+        let obj = if idx >= 128 {
+            None
+        } else {
+            buffer.get_cache(&self.api, idx)
+        };
+
+        let (mut o, el) = match obj {
+            Some((o, el)) => (*o, Some(el)),
+            None => {
+                let init = buffer.slice_choice(&self.ctors)?;
+                (init(target, buffer)?, None)
+            }
+        };
+
+        let mut it = 0;
 
         if !self.funcs.is_empty() {
-            for i in 0..buffer.get_u8()? as usize % MAX_CALLS {
+            loop {
+                if buffer.get_u8()? % 2 == 0 || it >= MAX_CALLS {
+                    break;
+                }
                 let func = buffer.slice_choice(&self.funcs)?;
-                let ret = func(target, &mut obj, buffer)?;
+                let ret = func(target, &mut o, buffer)?;
+                it += 1;
 
                 match ret {
                     Objects::None => {},
-                    val => { obj = val }
+                    val => { o = val }
                 }
             }
         }
 
-        buffer.add_cache(self.api, Box::new(obj));
+        buffer.add_cache(self.api, Box::new(o), el);
 
         Ok(())
     }
@@ -90,7 +109,7 @@ impl Target {
 pub struct Buffer<'a> {
     data: &'a [u8],
     it: usize,
-    cache: HashMap<Apis, Vec<Box<Objects>>>
+    cache: HashMap<Apis, Vec<Option<Box<Objects>>>>
 }
 
 impl<'a> Buffer<'a> {
@@ -98,18 +117,26 @@ impl<'a> Buffer<'a> {
         Self { data: buffer, it: 0usize, cache: HashMap::new() }
     }
 
-    pub fn add_cache(&mut self, api: Apis, obj: Box<Objects>) {
-        self.cache.entry(api).or_insert(Vec::new()).push(obj);
+    pub fn add_cache(&mut self, api: Apis, obj: Box<Objects>, idx: Option<usize>) {
+        let objs = self.cache.entry(api).or_insert(Vec::new());
+
+        if let Some(idx) = idx {
+            std::mem::replace(&mut objs[idx], Some(obj));
+        } else {
+            objs.push(Some(obj));
+        }
     }
 
-    pub fn get_cache(&mut self, api: &Apis, idx: usize) -> Option<Box<Objects>> {
+    pub fn get_cache(&mut self, api: &Apis, idx: usize) -> Option<(Box<Objects>, usize)> {
         match self.cache.get_mut(api) {
             None => None,
             Some(vec) => {
                 if vec.is_empty() {
                     None
                 } else {
-                    Some(vec.remove(idx % vec.len()))
+                    let el = idx % vec.len();
+                    std::mem::replace(&mut vec[el], None)
+                        .map(|o| (o, el))
                 }
             }
         }
@@ -162,3 +189,100 @@ impl<'a> Buffer<'a> {
         Ok(slice.iter().nth(index as usize % total_len).unwrap())
     }
 }
+
+pub struct TcAssembler {
+    tc: Vec<u8>,
+    ids: HashMap<Apis, usize>,
+    last_api: Option<u8>,
+    tc_name: String,
+    tc_save: Option<Box<fn (&str, &[u8]) -> ()>>
+}
+
+impl TcAssembler {
+    fn new() -> Self {
+        Self {
+            tc: Vec::new(),
+            ids: HashMap::new(),
+            last_api: None,
+            tc_name: String::new(),
+            tc_save: None
+        }
+    }
+
+    pub fn enter(&mut self, tcname: &str) {
+        self.tc.clear();
+        self.tc_name = tcname.to_string();
+    }
+
+    pub fn leave(&self) {
+        trace_println!("[[TCGEN]] Assembled testcase {}", self.tc_name);
+
+        if let Some(save_testcase) = self.tc_save.as_ref() {
+            save_testcase(&self.tc_name, self.tc.as_slice());
+        }
+    }
+
+    pub fn set_tc_save_routine(&mut self, func: fn (&str, &[u8]) -> ()) {
+        self.tc_save = Some(Box::new(func));
+    }
+
+    pub fn add_byte(&mut self, v: u8) -> &mut Self {
+        self.tc.push(v);
+        self
+    }
+
+    pub fn add_bytes(&mut self, data: &[u8]) -> &mut Self {
+        self.tc.extend(data);
+        self
+    }
+
+    pub fn select_api(&mut self, api: u8) -> &mut Self {
+        if let Some(n) = self.last_api {
+            if n != api {
+                self.last_api = Some(api);
+                self.add_byte(0u8);
+            }
+        }
+
+        self.add_byte(api)
+    }
+
+    pub fn ctor_new_obj(&mut self) -> &mut Self {
+        self.add_byte(255u8)
+    }
+
+    pub fn use_obj(&mut self, id: usize) -> &mut Self {
+        self.add_byte(id as u8)
+    }
+
+    pub fn select_ctor(&mut self, id: u8) -> &mut Self {
+        self.add_byte(id);
+        self
+    }
+
+    pub fn select_func(&mut self, id: u8) -> &mut Self {
+        self.add_byte(1u8);
+        self.add_byte(id)
+    }
+
+    pub fn alloc_id(&mut self, api: Apis) -> usize {
+        let v = self.ids.entry(api).or_insert(0);
+        let ret = *v;
+        *v += 1;
+        ret
+    }
+
+    pub fn take() -> MutexGuard<'static, Self> {
+        use lazy_static::lazy_static;
+        lazy_static! {
+            static ref INSTANCE: Mutex<TcAssembler> = Mutex::new(TcAssembler::new());
+        }
+        INSTANCE.lock().unwrap()
+    }
+}
+
+pub trait Id {
+    fn __set_id__(&mut self);
+    fn __get_id__(&self) -> usize;
+}
+

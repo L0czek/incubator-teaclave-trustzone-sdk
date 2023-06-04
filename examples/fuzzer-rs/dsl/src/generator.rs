@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf, str::FromStr};
 use crate::{parser::{Expression, Function, Target, ImportLine, Api}, tcgen::TcGenerator};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, TokenStreamExt, ToTokens};
-use syn::{Ident, parse_file, File, token};
+use syn::{Ident, parse_file, File, token, Path};
 
 #[derive(Debug)]
 pub(super) struct ExpressionCompiler {
@@ -82,24 +82,32 @@ impl ExpressionCompiler {
                 }
             }
             Expression::Api(name) => {
+                let idx_label = self.next_label();
+                let val_label = self.next_label();
+
                 self.post.append_all(quote! {
-                    buffer.add_cache(Apis::#name, Box::new(Objects::#name(#label)));
+                    buffer.add_cache(Apis::#name, Box::new(Objects::#name(#label)), Some(#idx_label));
                 });
 
-                quote! {
-                    {
+                self.tokens.append_all(quote! {
+                    let (#val_label, #idx_label) = {
                         let idx = buffer.get_u8()? as usize;
                         let mut __o__ = buffer.get_cache(&Apis::#name, idx);
                         if let None = __o__ {
                             target.fuzz_api(Apis::#name, buffer)?;
                             __o__ = buffer.get_cache(&Apis::#name, idx);
                         }
-                        if let Objects::#name(__o) = *__o__.unwrap() {
-                            __o
+                        let (obj, el) = __o__.unwrap();
+                        if let Objects::#name(__o) = *obj {
+                            (__o, el)
                         } else {
                             return Err(FuzzerError::ObjectIsOfInvalidType)
                         }
-                    }
+                    };
+                });
+
+                quote! {
+                    #val_label
                 }
             },
             Expression::EmptyVector => quote! { std::vec::Vec::new() },
@@ -211,13 +219,13 @@ impl<'a> CodeGenerator<'a> {
         let tcgen = self.generate_tc_generator();
 
         quote! {
-            mod #name {
+            pub mod #name {
                 use optee_utee::trace_println;
 
-                mod internal {
+                pub mod internal {
                     #internal
                 }
-                use internal::*;
+                pub use internal::*;
                 #enums
                 #imports
                 #target
@@ -243,11 +251,61 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
+    fn generate_ctor_name(&self, name: &Path) -> String {
+        format!("{}", name.clone().into_token_stream())
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>()
+            .replace("::", "_")
+    }
+
+    fn generate_ctors_encoding_enum(&self, api: &Api) -> TokenStream2 {
+        let names = api.ctors.iter()
+            .map(|ctor| Ident::new(&self.generate_ctor_name(&ctor.name).as_str(), Span::call_site()))
+            .collect::<Vec<Ident>>();
+        let idx = 0isize..names.len() as isize;
+        let cls = format!("__ctors_{}", api.name);
+        let label = Ident::new(cls.as_str(), Span::call_site());
+
+        quote! {
+            #[derive(Debug, Clone, Copy)]
+            pub enum #label {
+                #(
+                    #names = #idx,
+                )*
+            }
+        }
+    }
+
+    fn generate_member_encoding_enum(&self, api: &Api) -> TokenStream2 {
+        let names = api.functions.iter().map(|func| &func.name).collect::<Vec<&Path>>();
+        let idx = 0isize..names.len() as isize;
+        let cls = format!("__members_{}", api.name);
+        let label = Ident::new(cls.as_str(), Span::call_site());
+
+        quote! {
+            #[derive(Debug, Clone, Copy)]
+            pub enum #label {
+                #(
+                    #names = #idx,
+                )*
+            }
+        }
+    }
+
     fn generate_enums(&self) -> TokenStream2 {
         let apis: Vec<&Ident> = self.target.apis.iter().map(|i| &i.name).collect();
         let objs = apis.clone();
         let names = objs.clone();
         let indexes = 0isize..apis.len() as isize;
+
+        let ctor_enums = self.target.apis.iter()
+            .map(|api| self.generate_ctors_encoding_enum(api))
+            .collect::<Vec<TokenStream2>>();
+
+        let member_enums = self.target.apis.iter()
+            .map(|api| self.generate_member_encoding_enum(api))
+            .collect::<Vec<TokenStream2>>();
 
         quote! {
             #[derive(Debug)]
@@ -259,6 +317,16 @@ impl<'a> CodeGenerator<'a> {
             #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
             pub enum Apis {
                 #(#names = #indexes),*
+            }
+
+            pub mod encodings {
+                #(
+                    #ctor_enums
+                )*
+
+                #(
+                    #member_enums
+                )*
             }
         }
     }

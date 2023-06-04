@@ -1,6 +1,6 @@
 use syn::{parse::Parse, punctuated::Punctuated, *, token::parsing::keyword};
 
-mod keywords {
+pub mod keywords {
     use syn::custom_keyword;
 
     custom_keyword!(OneOf);

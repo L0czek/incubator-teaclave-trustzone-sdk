@@ -29,6 +29,7 @@ libc = "0.2.48"
 proto = { path = "../proto" }
 optee-teec = { path = "../../../optee-teec" }
 clap = { version = "*" }
+hex = "0.4.3"
 
 [profile.release]
 lto = true

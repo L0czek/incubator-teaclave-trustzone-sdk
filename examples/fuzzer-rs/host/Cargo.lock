@@ -54,6 +54,7 @@ name = "fuzzer-rs"
 version = "0.2.0"
 dependencies = [
  "clap",
+ "hex 0.4.3",
  "libc",
  "optee-teec",
  "proto",
@@ -81,6 +82,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
 
 [[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
 name = "indexmap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -100,7 +107,7 @@ checksum = "789da6d93f1b866ffe175afc5322a4d76c038605a1c3319bb57b06967ca98a36"
 name = "optee-teec"
 version = "0.2.0"
 dependencies = [
- "hex",
+ "hex 0.3.2",
  "libc",
  "optee-teec-macros",
  "optee-teec-sys",
