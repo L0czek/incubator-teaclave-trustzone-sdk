@@ -221,6 +221,76 @@ pub mod tc {
     #[tcgen_record]
     fn register_user() {
         let user = Creds::register("123".to_string(), "456".to_string());
+        assert!(user.is_ok());
+    }
+
+    #[tcgen_record]
+    fn register_and_login_user() {
+        let _ = Creds::register("789".to_string(), "456".to_string());
+        let user = Creds::login("789".to_string(), "456".to_string());
+        assert!(user.is_ok());
+    }
+
+    #[tcgen_record]
+    fn set_key_for_user() {
+        let user = Creds::register("sample_user".to_string(), "password".to_string()).unwrap();
+        let key = Key::new(&user);
+        let user_key = [0xaau8; 32];
+        key.set(user_key);
+
+        let retrieved = key.get();
+        assert!(retrieved.is_ok());
+        assert!(retrieved.unwrap() == user_key);
+    }
+
+    #[tcgen_record]
+    fn alloc_slot() {
+        let slot = Slot::new();
+        assert!(slot.is_ok());
+    }
+
+    #[tcgen_record]
+    fn write_and_read_from_slot() {
+        let slot = Slot::new().unwrap();
+        let data = vec![1,2,3,4,5,6,7,8,9,10];
+        assert!(slot.set(data.clone()).is_ok());
+        assert!(slot.get().unwrap() == data);
+    }
+
+    #[tcgen_record]
+    fn tpm_save_slot() {
+        let user = Creds::register("sample_user2".to_string(), "password".to_string()).unwrap();
+        let slot = Slot::new().unwrap();
+        let tpm = TPM::new();
+        let key = Key::new(&user);
+
+        let user_key = [2u8; 32];
+        let secret = "tpm_secret".to_string().as_bytes().to_owned();
+        let data = "sample data to hide".to_string().as_bytes().to_owned();
+
+        assert!(key.set(user_key).is_ok());
+        assert!(slot.set(data.to_owned()).is_ok());
+        assert!(tpm.lock(secret, &user, &slot).is_ok());
+    }
+
+    #[tcgen_record]
+    fn tpm_save_and_unlock_slot() {
+        let user = Creds::register("sample_user2".to_string(), "password".to_string()).unwrap();
+        let slot = Slot::new().unwrap();
+        let tpm = TPM::new();
+        let key = Key::new(&user);
+
+        let user_key = [2u8; 32];
+        let secret = "tpm_secret".to_string().as_bytes().to_owned();
+        let data = "sample data to hide".to_string().as_bytes().to_owned();
+
+        assert!(key.set(user_key).is_ok());
+        assert!(slot.set(data.to_owned()).is_ok());
+        assert!(tpm.lock(secret.clone(), &user, &slot).is_ok());
+
+        let slot2 = Slot::new().unwrap();
+        assert!(tpm.unlock(secret.clone(), &user, &slot2).is_ok());
+        assert!(slot2.get().unwrap() == data);
     }
 
     pub fn run_all_tc() {
@@ -231,5 +301,14 @@ pub mod tc {
             });
 
         register_user();
+        register_and_login_user();
+
+        set_key_for_user();
+
+        alloc_slot();
+        write_and_read_from_slot();
+
+        tpm_save_slot();
+        tpm_save_and_unlock_slot();
     }
 }

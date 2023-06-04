@@ -334,8 +334,7 @@ impl<'a> TcTracer<'a> {
         let enum_name = Ident::new(format!("__ctors_{}", label).as_str(), Span::call_site());
         let mut prologue = quote! {
             TcAssembler::take()
-                .select_api(Apis::#ident as u8)
-                .ctor_new_obj()
+                .select_api(Apis::#ident as u8, None)
                 .select_ctor(encodings::#enum_name::#ctor_name as u8);
         };
         self.trace_params(&mut prologue);
@@ -355,8 +354,7 @@ impl<'a> TcTracer<'a> {
         let enum_name = Ident::new(format!("__members_{}", label).as_str(), Span::call_site());
         let mut prologue = quote! {
             TcAssembler::take()
-                .select_api(Apis::#ident as u8)
-                .use_obj(self.__get_id__())
+                .select_api(Apis::#ident as u8, Some(self.__get_id__()))
                 .select_func(encodings::#enum_name::#func_name as u8);
         };
         self.trace_params(&mut prologue);

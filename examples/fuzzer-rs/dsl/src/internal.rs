@@ -50,19 +50,22 @@ impl Api {
 
         let mut it = 0;
 
-        if !self.funcs.is_empty() {
-            loop {
-                if buffer.get_u8()? % 2 == 0 || it >= MAX_CALLS {
-                    break;
-                }
-                let func = buffer.slice_choice(&self.funcs)?;
-                let ret = func(target, &mut o, buffer)?;
-                it += 1;
+        loop {
+            if buffer.get_u8()? % 2 == 0 || it >= MAX_CALLS {
+                break;
+            }
 
-                match ret {
-                    Objects::None => {},
-                    val => { o = val }
-                }
+            if self.funcs.is_empty() {
+                break;
+            }
+
+            let func = buffer.slice_choice(&self.funcs)?;
+            let ret = func(target, &mut o, buffer)?;
+            it += 1;
+
+            match ret {
+                Objects::None => {},
+                val => { o = val }
             }
         }
 
@@ -214,12 +217,15 @@ impl TcAssembler {
         self.tc_name = tcname.to_string();
     }
 
-    pub fn leave(&self) {
+    pub fn leave(&mut self) {
         trace_println!("[[TCGEN]] Assembled testcase {}", self.tc_name);
 
         if let Some(save_testcase) = self.tc_save.as_ref() {
             save_testcase(&self.tc_name, self.tc.as_slice());
         }
+
+        self.ids.clear();
+        self.last_api = None;
     }
 
     pub fn set_tc_save_routine(&mut self, func: fn (&str, &[u8]) -> ()) {
@@ -236,15 +242,29 @@ impl TcAssembler {
         self
     }
 
-    pub fn select_api(&mut self, api: u8) -> &mut Self {
-        if let Some(n) = self.last_api {
-            if n != api {
+    pub fn select_api(&mut self, api: u8, obj_id: Option<usize>) -> &mut Self {
+        match self.last_api {
+            Some(n) => {
+                if n != api {
+                    self.add_byte(0u8);
+                    self.add_byte(api);
+                    self.last_api = Some(api);
+
+                    if let Some(obj) = obj_id {
+                        self.use_obj(obj);
+                    } else {
+                        self.ctor_new_obj();
+                    }
+                }
+            },
+            None => {
+                self.add_byte(api);
+                self.ctor_new_obj();
                 self.last_api = Some(api);
-                self.add_byte(0u8);
             }
         }
 
-        self.add_byte(api)
+        self
     }
 
     pub fn ctor_new_obj(&mut self) -> &mut Self {
