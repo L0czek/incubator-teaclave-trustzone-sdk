@@ -103,6 +103,18 @@ impl Handler {
                 Response::Ok
             }
             Request::GetFromSlot(id) => Response::Data(self.slots.get(id).unwrap().to_owned()),
+            Request::SetupSlot(slotid, flags, size) => {
+                let slot = self.slots.get_mut(slotid);
+
+                if let Some(slot) = slot {
+                    if *flags == 0xDEADBEEF {
+                        slot.resize(*size, 0u8);
+                        return Response::Ok;
+                    }
+                }
+
+                Response::Err(Error::InvalidResponse)
+            }
             Request::FreeSlot(id) => {
                 self.slots.remove(id);
                 Response::Ok

@@ -15,6 +15,7 @@ pub enum Request {
     AllocSlot(),
     SaveToSlot(usize, Vec<u8>),
     GetFromSlot(usize),
+    SetupSlot(usize, usize, usize),
     FreeSlot(usize),
 
     TpmLock(Vec<u8>, usize, usize),
@@ -32,32 +33,33 @@ enum RequestIds {
     AllocSlot = 5,
     SaveToSlot = 6,
     GetFromSlot = 7,
+    SetupSlot = 11,
     FreeSlot = 8,
 
     TpmLock = 9,
     TpmUnlock = 10,
 }
 
-impl Arbitrary for Request {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
-        match u8::arbitrary(u)? % 10 {
-            0 => Ok(Request::UserLogin(String::arbitrary(u)?, String::arbitrary(u)?)),
-            1 => Ok(Request::UserRegister(String::arbitrary(u)?, String::arbitrary(u)?)),
+// impl Arbitrary for Request {
+//     fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
+//         match u8::arbitrary(u)? % 10 {
+//             0 => Ok(Request::UserLogin(String::arbitrary(u)?, String::arbitrary(u)?)),
+//             1 => Ok(Request::UserRegister(String::arbitrary(u)?, String::arbitrary(u)?)),
 
-            2 => Ok(Request::SaveKeyForUser(usize::arbitrary(u)?, KeyType::arbitrary(u)?)),
-            3 => Ok(Request::GetKeyForUser(usize::arbitrary(u)?)),
+//             2 => Ok(Request::SaveKeyForUser(usize::arbitrary(u)?, KeyType::arbitrary(u)?)),
+//             3 => Ok(Request::GetKeyForUser(usize::arbitrary(u)?)),
 
-            4 => Ok(Request::AllocSlot()),
-            5 => Ok(Request::SaveToSlot(usize::arbitrary(u)?, Vec::arbitrary(u)?)),
-            6 => Ok(Request::GetFromSlot(usize::arbitrary(u)?)),
-            7 => Ok(Request::FreeSlot(usize::arbitrary(u)?)),
+//             4 => Ok(Request::AllocSlot()),
+//             5 => Ok(Request::SaveToSlot(usize::arbitrary(u)?, Vec::arbitrary(u)?)),
+//             6 => Ok(Request::GetFromSlot(usize::arbitrary(u)?)),
+//             7 => Ok(Request::FreeSlot(usize::arbitrary(u)?)),
 
-            8 => Ok(Request::TpmLock(Vec::arbitrary(u)?, usize::arbitrary(u)?, usize::arbitrary(u)?)),
-            9 => Ok(Request::TpmUnlock(Vec::arbitrary(u)?, usize::arbitrary(u)?, usize::arbitrary(u)?)),
-            _ => Err(arbitrary::Error::IncorrectFormat)
-        }
-    }
-}
+//             8 => Ok(Request::TpmLock(Vec::arbitrary(u)?, usize::arbitrary(u)?, usize::arbitrary(u)?)),
+//             9 => Ok(Request::TpmUnlock(Vec::arbitrary(u)?, usize::arbitrary(u)?, usize::arbitrary(u)?)),
+//             _ => Err(arbitrary::Error::IncorrectFormat)
+//         }
+//     }
+// }
 
 impl Serialize for Request {
     fn serialize(&self) -> Serializer {
@@ -97,6 +99,12 @@ impl Serialize for Request {
                 serializer.push_u32(RequestIds::GetFromSlot as u32);
                 serializer.push_usize(*slotid);
             }
+            Request::SetupSlot(slotid, flags, size) => {
+                serializer.push_u32(RequestIds::SetupSlot as u32);
+                serializer.push_usize(*slotid);
+                serializer.push_usize(*flags);
+                serializer.push_usize(*size);
+            }
             Request::FreeSlot(slotid) => {
                 serializer.push_u32(RequestIds::FreeSlot as u32);
                 serializer.push_usize(*slotid);
@@ -131,6 +139,7 @@ impl TryInto<RequestIds> for u32 {
             x if x == RequestIds::AllocSlot as u32 => Ok(RequestIds::AllocSlot),
             x if x == RequestIds::SaveToSlot as u32 => Ok(RequestIds::SaveToSlot),
             x if x == RequestIds::GetFromSlot as u32 => Ok(RequestIds::GetFromSlot),
+            x if x == RequestIds::SetupSlot as u32 => Ok(RequestIds::SetupSlot),
             x if x == RequestIds::FreeSlot as u32 => Ok(RequestIds::FreeSlot),
             x if x == RequestIds::TpmLock as u32 => Ok(RequestIds::TpmLock),
             x if x == RequestIds::TpmUnlock as u32 => Ok(RequestIds::TpmUnlock),
@@ -171,6 +180,11 @@ impl Deserialize for Request {
                 deserializer.pop_data()?,
             )),
             RequestIds::GetFromSlot => Ok(Request::GetFromSlot(deserializer.pop_usize()?)),
+            RequestIds::SetupSlot => Ok(Request::SetupSlot(
+                deserializer.pop_usize()?,
+                deserializer.pop_usize()?,
+                deserializer.pop_usize()?
+            )),
             RequestIds::FreeSlot => Ok(Request::FreeSlot(deserializer.pop_usize()?)),
 
             RequestIds::TpmLock => Ok(Request::TpmLock(

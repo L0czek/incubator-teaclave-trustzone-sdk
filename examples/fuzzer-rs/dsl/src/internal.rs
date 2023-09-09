@@ -177,6 +177,10 @@ impl<'a> Buffer<'a> {
         Ok(u64::from_le_bytes(self.slice(size_of::<u64>())?.try_into().unwrap()))
     }
 
+    pub fn get_usize(&mut self) -> Result<usize, FuzzerError> {
+        self.get_u64().map(|v| v as usize)
+    }
+
     pub fn uszie_array(&mut self, n: usize) -> Result<Vec<usize>, FuzzerError> {
         (0..n).map(|_| self.get_u64().map(|v| v as usize)).collect::<Result<Vec<usize>, FuzzerError>>()
     }

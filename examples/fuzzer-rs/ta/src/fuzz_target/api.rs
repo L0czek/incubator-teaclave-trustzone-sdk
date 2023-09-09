@@ -134,6 +134,19 @@ impl Slot {
             _ => Err(Error::InvalidResponse),
         }
     }
+
+    pub fn setup(&self, flags: usize, size: usize) -> Result<(), Error> {
+        let req = Request::SetupSlot(self.slotid, flags, size);
+
+        let resp = Response::deserialize(&mut Deserializer::new(
+                HANDLER.lock().unwrap().command(req.serialize().into()
+        )))?;
+
+        match resp {
+            Response::Ok => Ok(()),
+            _ => Err(Error::InvalidResponse)
+        }
+    }
 }
 
 impl Drop for Slot {

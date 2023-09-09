@@ -153,6 +153,20 @@ impl Slot {
             _ => Err(Error::InvalidResponse),
         }
     }
+
+    #[tcgen_member(Slot)]
+    pub fn setup(&self, flags: usize, size: usize) -> Result<(), Error> {
+        let req = Request::SetupSlot(self.slotid, flags, size);
+
+        let resp = Response::deserialize(&mut Deserializer::new(
+                HANDLER.lock().unwrap().command(req.serialize().into()
+        )))?;
+
+        match resp {
+            Response::Ok => Ok(()),
+            _ => Err(Error::InvalidResponse)
+        }
+    }
 }
 
 impl Drop for Slot {
@@ -250,6 +264,14 @@ pub mod tc {
     }
 
     #[tcgen_record]
+    fn setup_slot() {
+        let slot = Slot::new();
+        assert!(slot.is_ok());
+        let ret = slot.unwrap().setup(0xDEADBEEF, 0x10);
+        assert!(ret.is_ok());
+    }
+
+    #[tcgen_record]
     fn write_and_read_from_slot() {
         let slot = Slot::new().unwrap();
         let data = vec![1,2,3,4,5,6,7,8,9,10];
@@ -307,6 +329,7 @@ pub mod tc {
 
         alloc_slot();
         write_and_read_from_slot();
+        setup_slot();
 
         tpm_save_slot();
         tpm_save_and_unlock_slot();

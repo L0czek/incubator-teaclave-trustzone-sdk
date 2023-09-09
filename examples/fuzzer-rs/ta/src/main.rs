@@ -18,6 +18,7 @@
 #![no_main]
 #![feature(asm)]
 #![feature(try_reserve)]
+#![feature(array_methods)]
 
 extern crate dsl;
 
@@ -72,7 +73,8 @@ dsl::target! {
                 }
                 functions {
                     set(#Vector(#Mod(#U8, 32))) -> (),
-                    get() -> ()
+                    get() -> (),
+                    setup(#Usize, #Usize) -> ()
                 }
             },
 

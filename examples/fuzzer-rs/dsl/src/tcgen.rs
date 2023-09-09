@@ -75,9 +75,9 @@ impl ExpressionReverser {
         match &*expr.as_ref() {
             Expression::Literal(_) => quote! {},
             Expression::U8 => self.add_byte(quote! { #value as u8 }),
-            Expression::U16 => self.add_bytes(quote! { (#value as u16).to_le_bytes() }),
-            Expression::U32 => self.add_bytes(quote! { (#value as u32).to_le_bytes() }),
-            Expression::Usize => self.add_bytes(quote! { (#value as usize).to_le_bytes() }),
+            Expression::U16 => self.add_bytes(quote! { (#value as u16).to_le_bytes().as_slice() }),
+            Expression::U32 => self.add_bytes(quote! { (#value as u32).to_le_bytes().as_slice() }),
+            Expression::Usize => self.add_bytes(quote! { (#value as usize).to_le_bytes().as_slice() }),
             Expression::Ref(expr) => self.reverse_expr(&expr, value),
             Expression::Vector(size) => self.add_slice(self.reverse_expr(size, quote! { #value.len() }), quote! { #value.as_slice() }),
             Expression::Slice(size) => self.add_slice(self.reverse_expr(size, quote! { #value.len() }), quote! { #value }),
