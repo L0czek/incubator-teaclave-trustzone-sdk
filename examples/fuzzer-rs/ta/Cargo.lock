@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "arbitrary"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db55d72333851e17d572bec876e390cd3b11eb1ef53ae821dd9f3b653d2b4569"
+
+[[package]]
 name = "bitflags"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -100,6 +106,7 @@ dependencies = [
 name = "ta"
 version = "0.2.0"
 dependencies = [
+ "arbitrary",
  "dsl",
  "lazy_static",
  "libc",

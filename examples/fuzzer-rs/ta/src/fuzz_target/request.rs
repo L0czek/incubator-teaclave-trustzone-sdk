@@ -1,12 +1,13 @@
 use super::error::Error;
 use super::serialize::*;
 use std::convert::TryInto;
+use arbitrary::Arbitrary;
 
-pub(super) type KeyType = [u8; 32];
+pub type KeyType = [u8; 32];
 
-pub(super) enum Request {
+pub enum Request {
     UserLogin(String, String),
-    UserRegster(String, String),
+    UserRegister(String, String),
 
     SaveKeyForUser(usize, KeyType),
     GetKeyForUser(usize),
@@ -37,6 +38,27 @@ enum RequestIds {
     TpmUnlock = 10,
 }
 
+impl Arbitrary for Request {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
+        match u8::arbitrary(u)? % 10 {
+            0 => Ok(Request::UserLogin(String::arbitrary(u)?, String::arbitrary(u)?)),
+            1 => Ok(Request::UserRegister(String::arbitrary(u)?, String::arbitrary(u)?)),
+
+            2 => Ok(Request::SaveKeyForUser(usize::arbitrary(u)?, KeyType::arbitrary(u)?)),
+            3 => Ok(Request::GetKeyForUser(usize::arbitrary(u)?)),
+
+            4 => Ok(Request::AllocSlot()),
+            5 => Ok(Request::SaveToSlot(usize::arbitrary(u)?, Vec::arbitrary(u)?)),
+            6 => Ok(Request::GetFromSlot(usize::arbitrary(u)?)),
+            7 => Ok(Request::FreeSlot(usize::arbitrary(u)?)),
+
+            8 => Ok(Request::TpmLock(Vec::arbitrary(u)?, usize::arbitrary(u)?, usize::arbitrary(u)?)),
+            9 => Ok(Request::TpmUnlock(Vec::arbitrary(u)?, usize::arbitrary(u)?, usize::arbitrary(u)?)),
+            _ => Err(arbitrary::Error::IncorrectFormat)
+        }
+    }
+}
+
 impl Serialize for Request {
     fn serialize(&self) -> Serializer {
         let mut serializer = Serializer::new();
@@ -47,7 +69,7 @@ impl Serialize for Request {
                 serializer.push_string(login);
                 serializer.push_string(pass);
             }
-            Request::UserRegster(login, pass) => {
+            Request::UserRegister(login, pass) => {
                 serializer.push_u32(RequestIds::UserRegster as u32);
                 serializer.push_string(login);
                 serializer.push_string(pass);
@@ -129,7 +151,7 @@ impl Deserialize for Request {
                 deserializer.pop_string()?,
                 deserializer.pop_string()?,
             )),
-            RequestIds::UserRegster => Ok(Request::UserRegster(
+            RequestIds::UserRegster => Ok(Request::UserRegister(
                 deserializer.pop_string()?,
                 deserializer.pop_string()?,
             )),
@@ -165,7 +187,7 @@ impl Deserialize for Request {
     }
 }
 
-pub(super) enum Response {
+pub enum Response {
     Key(KeyType),
     Data(Vec<u8>),
     Id(usize),

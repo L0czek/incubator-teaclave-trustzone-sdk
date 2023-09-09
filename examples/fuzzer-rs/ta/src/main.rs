@@ -21,15 +21,22 @@
 
 extern crate dsl;
 
+use std::sync::Mutex;
+
+use arbitrary::{Unstructured, Arbitrary};
 use fuzz_target::api_tcgen;
+use lazy_static::lazy_static;
 use optee_utee::{
     ta_close_session, ta_create, ta_destroy, ta_invoke_command, ta_open_session, trace_println,
 };
 use optee_utee::{Error, ErrorKind, Parameters, Result};
-use proto::Command;
+use proto::{Command, TestcaseDecodingMode};
 
 mod fuzz_target;
 mod fuzzer;
+
+use fuzz_target::api::HANDLER;
+use fuzz_target::request::Request;
 
 dsl::target! {
     test [trace] {
@@ -114,6 +121,18 @@ fn destroy() {
     }
 }
 
+lazy_static! {
+    static ref DECODING_MODE: Mutex<TestcaseDecodingMode> = Mutex::new(TestcaseDecodingMode::Dsl);
+}
+
+fn decode_testcase(tc: &[u8]) {
+    match *DECODING_MODE.lock().unwrap() {
+        TestcaseDecodingMode::Dsl => { test::fuzz(tc); },
+        TestcaseDecodingMode::Direct => { HANDLER.lock().unwrap().command(tc.to_owned()); },
+        _ => {}
+    }
+}
+
 fn start_fuzzing() {
     unsafe {
         trace_println!("Fuzzer: start command");
@@ -122,7 +141,7 @@ fn start_fuzzing() {
 
     if let Err(err) = fuzzer::run(|tc| {
         trace_println!("Received tc: {:?}", tc);
-        test::fuzz(tc);
+        decode_testcase(tc);
     }) {
         unsafe {
             trace_println!("Error while fuzzing: {:?}", err);
@@ -134,7 +153,7 @@ fn start_fuzzing() {
 fn run_testcase(tc: &[u8]) {
     unsafe {
         trace_println!("Fuzzer run testcase: {:?}", tc);
-        test::fuzz(tc);
+        decode_testcase(tc);
     }
 }
 
@@ -142,7 +161,7 @@ fn run_testcase_with_coverage(tc: &[u8]) {
     unsafe {
         trace_println!("Fuzzer run testcase: {:?}", tc);
         fuzzer::begin();
-        test::fuzz(tc);
+        decode_testcase(tc);
         fuzzer::end();
     }
 }
@@ -153,10 +172,14 @@ fn start_fuzzing_no_revert() {
     loop {
         let tc = fuzzer::fetch_testcase().expect("Cannot fetch testcase");
         fuzzer::begin();
-        test::fuzz(tc.as_slice());
+        decode_testcase(tc.as_slice());
         fuzzer::end();
         fuzzer::exit_no_restore(0i8);
     }
+}
+
+fn set_testcase_decoding_mode(mode: TestcaseDecodingMode) {
+    *DECODING_MODE.lock().unwrap() = mode;
 }
 
 #[ta_invoke_command]
@@ -172,6 +195,9 @@ fn invoke_command(cmd_id: u32, params: &mut Parameters) -> Result<()> {
         }
         Command::StartFuzzingNoRevert => start_fuzzing_no_revert(),
         Command::GenerateTestcases => api_tcgen::tc::run_all_tc(),
+        Command::SetTestcaseDecodingMode => set_testcase_decoding_mode(
+            unsafe { params.0.as_value() }?.a().into()
+        ),
         _ => return Err(Error::new(ErrorKind::BadParameters)),
     };
 

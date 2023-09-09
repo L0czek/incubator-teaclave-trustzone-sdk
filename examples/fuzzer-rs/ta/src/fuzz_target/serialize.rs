@@ -1,7 +1,7 @@
 use super::error::Error;
 use std::convert::TryInto;
 
-pub(super) struct Serializer {
+pub struct Serializer {
     data: Vec<u8>,
 }
 
@@ -36,11 +36,11 @@ impl Into<Vec<u8>> for Serializer {
     }
 }
 
-pub(super) trait Serialize {
+pub trait Serialize {
     fn serialize(&self) -> Serializer;
 }
 
-pub(super) struct Deserializer {
+pub struct Deserializer {
     data: Vec<u8>,
     it: usize,
 }
@@ -121,7 +121,7 @@ impl Deserializer {
     }
 }
 
-pub(super) trait Deserialize {
+pub trait Deserialize {
     fn deserialize(deserializer: &mut Deserializer) -> Result<Self, Error>
     where
         Self: Sized;

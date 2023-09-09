@@ -31,6 +31,7 @@ optee-utee-sys = { path = "../../../optee-utee/optee-utee-sys" }
 optee-utee = { path = "../../../optee-utee" }
 dsl = { path = "../dsl" }
 lazy_static = "1.4.0"
+arbitrary = "0.4.7"
 
 [build_dependencies]
 uuid = { version = "0.8" }

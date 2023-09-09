@@ -10,12 +10,12 @@ use super::request::*;
 use super::serialize::*;
 
 #[derive(Hash, Eq, PartialEq)]
-struct UserData {
+pub struct UserData {
     pub user: String,
     pub pass: String,
 }
 
-pub(super) struct Handler {
+pub struct Handler {
     uid: HashMap<UserData, usize>,
     keys: HashMap<usize, KeyType>,
     slots: HashMap<usize, Vec<u8>>,
@@ -68,7 +68,7 @@ impl Handler {
                     None => Response::Err(Error::InvalidCredentials),
                 }
             }
-            Request::UserRegster(user, pass) => {
+            Request::UserRegister(user, pass) => {
                 let user = UserData {
                     user: user.clone(),
                     pass: pass.clone(),

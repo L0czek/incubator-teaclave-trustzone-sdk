@@ -20,7 +20,7 @@
 
 use optee_teec::{Context, Operation, ParamType, Session, Uuid, Param, ParamTmpRef};
 use optee_teec::{ParamNone, ParamValue};
-use proto::{UUID, Command};
+use proto::{UUID, Command, TestcaseDecodingMode};
 use clap::{Command as ClapCommand, arg, value_parser};
 use std::string::String;
 
@@ -61,6 +61,12 @@ fn main() -> optee_teec::Result<()> {
             .id("exit")
             .action(clap::ArgAction::SetTrue)
             .exclusive(true)
+        )
+        .arg(
+            arg!(-m --mode <MODE> "Set testcase decoding mode")
+            .required(false)
+            .id("mode")
+            .value_parser(value_parser!(String))
         );
 
     let matches = cmd.get_matches();
@@ -68,6 +74,23 @@ fn main() -> optee_teec::Result<()> {
     let mut ctx = Context::new()?;
     let uuid = Uuid::parse_str(UUID).unwrap();
     let mut session = ctx.open_session(uuid)?;
+
+    if let Some(mode) = matches.get_one::<String>("mode") {
+        println!("mode: {:?}", mode);
+        let m = match mode {
+            x if x == "dsl" => TestcaseDecodingMode::Dsl,
+            x if x == "direct" => TestcaseDecodingMode::Direct,
+            _ => TestcaseDecodingMode::Invalid
+        };
+
+        if let TestcaseDecodingMode::Invalid = m {
+            println!("Invalid decoding mode provided!");
+        } else {
+            let p = ParamValue::new(m as u32, 0, ParamType::ValueInput);
+            let mut operation = Operation::new(0, p, ParamNone, ParamNone, ParamNone);
+            session.invoke_command(Command::SetTestcaseDecodingMode as u32, &mut operation)?;
+        }
+    }
 
     if let Some(testcase) = matches.get_one::<String>("testcase") {
         println!("Run testcase {}", testcase);

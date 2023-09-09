@@ -9,8 +9,9 @@ use lazy_static::lazy_static;
 use std::sync::Mutex;
 
 lazy_static! {
-    static ref HANDLER: Mutex<handler::Handler> = Mutex::new(handler::Handler::new());
+    pub static ref HANDLER: Mutex<handler::Handler> = Mutex::new(handler::Handler::new());
 }
+
 
 #[derive(Debug)]
 pub struct Creds {
@@ -46,7 +47,7 @@ impl Creds {
     }
 
     pub fn register(user: String, password: String) -> Result<Self, Error> {
-        let req = Request::UserRegster(user, password);
+        let req = Request::UserRegister(user, password);
 
         let resp = Response::deserialize(&mut Deserializer::new(
             HANDLER.lock().unwrap().command(req.serialize().into()),

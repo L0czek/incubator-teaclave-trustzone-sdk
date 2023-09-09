@@ -21,6 +21,7 @@ pub enum Command {
     RunTestcaseWithCoverage = 2,
     StartFuzzingNoRevert = 3,
     GenerateTestcases = 4,
+    SetTestcaseDecodingMode = 5,
     Unknown,
 }
 
@@ -33,8 +34,27 @@ impl From<u32> for Command {
             2 => Command::RunTestcaseWithCoverage,
             3 => Command::StartFuzzingNoRevert,
             4 => Command::GenerateTestcases,
+            5 => Command::SetTestcaseDecodingMode,
             _ => Command::Unknown,
         }
+    }
+}
+
+pub enum TestcaseDecodingMode {
+    Dsl = 0,
+    Direct = 1,
+    Invalid
+}
+
+impl From<u32> for TestcaseDecodingMode {
+    #[inline]
+    fn from(value: u32) -> Self {
+        match value {
+            0 => TestcaseDecodingMode::Dsl,
+            1 => TestcaseDecodingMode::Direct,
+            _ => TestcaseDecodingMode::Invalid
+        }
+
     }
 }
 

@@ -55,7 +55,7 @@ impl Creds {
 
     #[tcgen_ctor(Creds, Creds::register)]
     pub fn register(user: String, password: String) -> Result<Self, Error> {
-        let req = Request::UserRegster(user, password);
+        let req = Request::UserRegister(user, password);
 
         let resp = Response::deserialize(&mut Deserializer::new(
             HANDLER.lock().unwrap().command(req.serialize().into()),
