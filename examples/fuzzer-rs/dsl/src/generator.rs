@@ -435,7 +435,9 @@ impl<'a> CodeGenerator<'a> {
             |target: &Target, buffer: &mut Buffer| {
                 #init
                 #trace_begin
+                crate::fuzzer::begin();
                 let ret = #ctor(#(#params),*);
+                crate::fuzzer::end();
                 #trace_end
                 #deinit
                 #unpack_obj
@@ -467,7 +469,9 @@ impl<'a> CodeGenerator<'a> {
                 if let Objects::#api_name(__o) = obj {
                     #init
                     #trace_begin
+                    crate::fuzzer::begin();
                     let ret = #api_name::#func_name(__o #(, #params)*);
+                    crate::fuzzer::end();
                     #trace_end
                     #deinit
                     #return_value
@@ -490,7 +494,9 @@ impl<'a> CodeGenerator<'a> {
             |target: &Target, buffer: &mut Buffer| {
                 #init
                 #trace_begin
+                crate::fuzzer::begin();
                 let ret = #name(#(#params),*);
+                crate::fuzzer::end();
                 #trace_end
                 #deinit
                 Ok(())

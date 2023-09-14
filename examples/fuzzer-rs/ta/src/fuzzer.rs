@@ -117,9 +117,7 @@ pub fn run(target: fn(&[u8]) -> ()) -> Result<(), FuzzerError> {
     forkserver();
 
     let testcase = fetch_testcase()?;
-    begin();
     target(testcase.as_slice());
-    end();
 
     Ok(())
 }

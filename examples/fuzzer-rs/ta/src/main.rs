@@ -22,6 +22,9 @@
 
 extern crate dsl;
 
+use std::io::BufWriter;
+use std::io::Write;
+use std::panic;
 use std::sync::Mutex;
 
 use arbitrary::{Unstructured, Arbitrary};
@@ -39,6 +42,7 @@ mod fuzzer;
 use fuzz_target::api::HANDLER;
 use fuzz_target::request::Request;
 
+use core::panic::PanicInfo;
 dsl::target! {
     test [trace] {
         use {
@@ -98,6 +102,12 @@ fn create() -> Result<()> {
     unsafe {
         trace_println!("[+] TA create");
     }
+    panic::set_hook(Box::new(|info| {
+        let mut buf = BufWriter::new(Vec::new());
+        write!(&mut buf, "Panic msg: {}", info);
+        fuzzer::log(std::str::from_utf8(buf.buffer()).unwrap());
+        fuzzer::kill(fuzzer::Signals::SIGSEGV);
+    }));
     Ok(())
 }
 
@@ -130,7 +140,11 @@ lazy_static! {
 fn decode_testcase(tc: &[u8]) {
     match *DECODING_MODE.lock().unwrap() {
         TestcaseDecodingMode::Dsl => { test::fuzz(tc); },
-        TestcaseDecodingMode::Direct => { HANDLER.lock().unwrap().command(tc.to_owned()); },
+        TestcaseDecodingMode::Direct => {
+            fuzzer::begin();
+            HANDLER.lock().unwrap().command(tc.to_owned());
+            fuzzer::end();
+        },
         _ => {}
     }
 }
@@ -162,9 +176,7 @@ fn run_testcase(tc: &[u8]) {
 fn run_testcase_with_coverage(tc: &[u8]) {
     unsafe {
         trace_println!("Fuzzer run testcase: {:?}", tc);
-        fuzzer::begin();
         decode_testcase(tc);
-        fuzzer::end();
     }
 }
 
@@ -173,9 +185,7 @@ fn start_fuzzing_no_revert() {
 
     loop {
         let tc = fuzzer::fetch_testcase().expect("Cannot fetch testcase");
-        fuzzer::begin();
         decode_testcase(tc.as_slice());
-        fuzzer::end();
         fuzzer::exit_no_restore(0i8);
     }
 }
