@@ -58,6 +58,26 @@ impl Creds {
             _ => Err(Error::InvalidResponse),
         }
     }
+
+    pub fn set_attr(&self, attr: String) -> Result<(), Error> {
+        let req = Request::SetUserAttributes(self.uid, attr);
+
+        let resp = Response::deserialize(&mut Deserializer::new(
+                HANDLER.lock().unwrap().command(req.serialize().into())
+        ))?;
+
+        Ok(())
+    }
+
+    pub fn get_attr(&self) -> Result<(), Error> {
+        let req = Request::GetUserAttributes(self.uid);
+
+        let resp = Response::deserialize(&mut Deserializer::new(
+                HANDLER.lock().unwrap().command(req.serialize().into())
+        ))?;
+
+        Ok(())
+    }
 }
 
 impl Key {

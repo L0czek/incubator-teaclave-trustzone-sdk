@@ -1,3 +1,5 @@
+use optee_utee::trace_println;
+
 use super::error::Error;
 use std::convert::TryInto;
 
@@ -25,7 +27,6 @@ impl Serializer {
     }
     pub fn push_string(&mut self, v: &String) {
         let data = v.as_bytes();
-        self.push_u32(data.len() as u32);
         self.push_data(data);
     }
 }
@@ -81,7 +82,7 @@ impl Deserializer {
             .data
             .iter()
             .skip(self.it)
-            .take(8)
+            .take(core::mem::size_of::<usize>())
             .cloned()
             .collect::<Vec<u8>>()
             .as_slice()

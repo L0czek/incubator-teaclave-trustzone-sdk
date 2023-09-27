@@ -66,6 +66,28 @@ impl Creds {
             _ => Err(Error::InvalidResponse),
         }
     }
+
+    #[tcgen_member(Creds)]
+    pub fn set_attr(&self, attr: String) -> Result<(), Error> {
+        let req = Request::SetUserAttributes(self.uid, attr);
+
+        let resp = Response::deserialize(&mut Deserializer::new(
+                HANDLER.lock().unwrap().command(req.serialize().into())
+        ))?;
+
+        Ok(())
+    }
+
+    #[tcgen_member(Creds)]
+    pub fn get_attr(&self) -> Result<(), Error> {
+        let req = Request::GetUserAttributes(self.uid);
+
+        let resp = Response::deserialize(&mut Deserializer::new(
+                HANDLER.lock().unwrap().command(req.serialize().into())
+        ))?;
+
+        Ok(())
+    }
 }
 
 impl_id! { Creds }
@@ -246,6 +268,14 @@ pub mod tc {
     }
 
     #[tcgen_record]
+    fn set_creds_attributes() {
+        let user = Creds::register("222222".to_string(), "333333".to_string()).unwrap();
+        let res = user.set_attr("\"a\":\"b\",".to_string());
+        assert!(res.is_ok());
+        user.get_attr();
+    }
+
+    #[tcgen_record]
     fn set_key_for_user() {
         let user = Creds::register("sample_user".to_string(), "password".to_string()).unwrap();
         let key = Key::new(&user);
@@ -324,6 +354,7 @@ pub mod tc {
 
         register_user();
         register_and_login_user();
+        set_creds_attributes();
 
         set_key_for_user();
 

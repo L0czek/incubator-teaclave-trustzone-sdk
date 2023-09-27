@@ -1,6 +1,6 @@
 use proc_macro2::{TokenStream as TokenStream2, Span};
 use quote::{quote, TokenStreamExt, ToTokens};
-use syn::{ItemFn, FnArg, Path, Pat, FnDecl, Token, Ident, parse::Parse};
+use syn::{ItemFn, FnArg, Path, Pat, Token, Ident, parse::Parse};
 use crate::{parser::{Target, Api, Function, Expression, keywords}, generator::ExpressionCompiler};
 
 #[derive(Debug)]
@@ -255,13 +255,13 @@ impl<'a> TcTracer<'a> {
     }
 
     fn trace_param(&self, param: &FnArg, index: usize) -> TokenStream2 {
-        if let FnArg::SelfRef(_) = param {
+        if let FnArg::Receiver(_) = param {
             return quote! {}
         }
 
         let ident = match param {
-            FnArg::Captured(arg) => {
-                match &arg.pat {
+            FnArg::Typed(arg) => {
+                match &*arg.pat {
                     Pat::Ident(ident) => Some(ident),
                     _ => None,
                 }
@@ -270,7 +270,7 @@ impl<'a> TcTracer<'a> {
         };
 
         if let Some(ident) = ident {
-            let func_name_ident = format!("{}", self.func.ident);
+            let func_name_ident = format!("{}", self.func.sig.ident);
             let func_name = self.full_path.as_ref().unwrap_or(&func_name_ident);
 
             let name = Ident::new(
@@ -289,35 +289,17 @@ impl<'a> TcTracer<'a> {
     }
 
     fn trace_params(&self, code: &mut TokenStream2) {
-        self.func.decl.inputs.iter()
+        self.func.sig.inputs.iter()
             .enumerate()
             .map(|(ind, arg)| self.trace_param(arg, ind))
             .for_each(|c| code.append_all(c));
     }
 
     fn construct_function(&self, prologue: TokenStream2, epilogue: TokenStream2) -> TokenStream2 {
-        let ItemFn {
-            attrs,
-            vis,
-            constness,
-            unsafety,
-            asyncness,
-            abi,
-            ident,
-            decl,
-            block,
-        } = self.func;
-
-        let FnDecl {
-            generics,
-            inputs,
-            variadic,
-            output,
-            ..
-        } = &*decl.as_ref();
+        let ItemFn { attrs, vis, sig, block } = self.func;
 
         quote! {
-            #(#attrs)* #vis #constness #unsafety #asyncness #abi fn #ident (#(#inputs),*) #output {
+            #(#attrs)* #vis #sig {
                 #prologue
                 let mut __ret__ = { #block };
                 #epilogue
@@ -350,7 +332,7 @@ impl<'a> TcTracer<'a> {
     pub fn compile_member(&self) -> TokenStream2 {
         let label = &self.cls;
         let ident = Ident::new(label.as_str(), Span::call_site());
-        let func_name = &self.func.ident;
+        let func_name = &self.func.sig.ident;
         let enum_name = Ident::new(format!("__members_{}", label).as_str(), Span::call_site());
         let mut prologue = quote! {
             TcAssembler::take()

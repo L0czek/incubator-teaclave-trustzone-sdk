@@ -19,6 +19,9 @@
 #![feature(asm)]
 #![feature(try_reserve)]
 #![feature(array_methods)]
+#![feature(associated_type_defaults)]
+#![feature(unsized_locals)]
+#![allow(incomplete_features)]
 
 extern crate dsl;
 
@@ -58,7 +61,10 @@ dsl::target! {
                     Creds::login(#Str(#Mod(#U8, 32)), #Str(#Mod(#U8, 32))) -> Creds,
                     Creds::register(#Str(#Mod(#U8, 32)), #Str(#Mod(#U8, 32))) -> Creds
                 }
-                functions {}
+                functions {
+                    set_attr(#Str(#Mod(#U8, 32))) -> (),
+                    get_attr() -> ()
+                }
             },
 
             Key {

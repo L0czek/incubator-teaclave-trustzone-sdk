@@ -2,17 +2,36 @@ use std::hash::Hash;
 use std::string::String;
 use std::vec::Vec;
 use std::{collections::hash_map::HashMap, convert::TryInto};
-
 use optee_utee::{trace_println, AttributeMemref, Digest};
+use std::fmt::Write;
+
+use crate::fuzzer;
 
 use super::error::Error;
 use super::request::*;
 use super::serialize::*;
 
+macro_rules! bugon {
+    ($msg:expr, $val:expr) => {
+        {
+            if $val.is_none() {
+                trace_println!("BUG [[{}]]", $msg);
+            }
+            $val
+        }
+    };
+}
+
 #[derive(Hash, Eq, PartialEq)]
 pub struct UserData {
     pub user: String,
     pub pass: String,
+}
+
+#[derive(Hash, Eq, PartialEq, Debug)]
+pub enum Attr {
+    Str(String),
+    Int(usize)
 }
 
 pub struct Handler {
@@ -22,18 +41,22 @@ pub struct Handler {
     data: HashMap<[u8; 32], Vec<u8>>,
     uids: usize,
     sids: usize,
+    attrs: HashMap<usize, HashMap<String, Attr>>
 }
 
 impl Handler {
     pub fn new() -> Handler {
-        Handler {
+        let handler = Handler {
             uid: HashMap::new(),
             keys: HashMap::new(),
             slots: HashMap::new(),
             data: HashMap::new(),
             uids: 0usize,
             sids: 0usize,
-        }
+            attrs: HashMap::new()
+        };
+
+        handler
     }
 
     fn hash(&self, data: &[u8]) -> [u8; 32] {
@@ -52,6 +75,45 @@ impl Handler {
         };
 
         resp.serialize().into()
+    }
+
+    fn parse_user_attrs(storage: &mut HashMap<String, Attr>, attr: &String) {
+        let mut i = 0;
+
+        while i < attr.len() {
+            if attr.as_bytes()[i] == '"' as u8 {
+                let mut name = String::new();
+                i += 1;
+                while attr.as_bytes()[i] != '"' as u8 {
+                    name.push(attr.as_bytes()[i].into());
+                    i += 1;
+                }
+                i += 1; // "
+                i += 1; // :
+                if attr.as_bytes()[i]  == '"' as u8 {
+                    let mut value = String::new();
+                    i += 1;
+                    while attr.as_bytes()[i]  != '"' as u8 {
+                        value.push(attr.as_bytes()[i].into());
+                        i += 1;
+                    }
+                    i += 1; // "
+                    i += 1; // ,
+                    storage.insert(name, Attr::Str(value));
+                } else {
+                    let mut value = String::new();
+                    i += 1;
+                    while attr.as_bytes()[i]  != ',' as u8 {
+                        value.push(attr.as_bytes()[i].into());
+                        i += 1;
+                    }
+                    i += 1; // ','
+                    if let Ok(v) = value.parse::<usize>() {
+                        storage.insert(name, Attr::Int(v));
+                    }
+                }
+            }
+        }
     }
 
     pub fn handle(&mut self, request: &Request) -> Response {
@@ -79,6 +141,22 @@ impl Handler {
 
                 Response::Id(id)
             }
+            Request::SetUserAttributes(uid, attr) => {
+                let entry = self.attrs.entry(*uid)
+                    .or_insert(HashMap::new());
+                entry.clear();
+                Self::parse_user_attrs(entry, attr);
+                Response::Ok
+            }
+            Request::GetUserAttributes(uid) => {
+                if let Some(attr) = self.attrs.get(uid) {
+                    trace_println!("{:?}\n", attr);
+                } else {
+                    trace_println!("No attrs for user\n");
+                }
+
+                Response::Ok
+            }
 
             Request::GetKeyForUser(uid) => {
                 if let Some(key) = self.keys.get(uid) {
@@ -99,7 +177,8 @@ impl Handler {
                 Response::Id(id)
             }
             Request::SaveToSlot(id, data) => {
-                *self.slots.get_mut(id).unwrap() = data.to_owned();
+                *bugon!("SaveToSlot", self.slots.get_mut(id))
+                    .unwrap() = data.to_owned();
                 Response::Ok
             }
             Request::GetFromSlot(id) => Response::Data(self.slots.get(id).unwrap().to_owned()),
@@ -124,12 +203,17 @@ impl Handler {
                 let hash = self.hash(&data);
                 let mut mac = Vec::new();
                 mac.extend(hash.iter());
-                mac.extend(self.keys.get(uid).expect("Failed to get user key"));
+                mac.extend(bugon!("TpmLock no key", self.keys.get(uid)).expect("Failed to get user key"));
                 let id = self.hash(mac.as_slice());
+
+                if !self.slots.contains_key(slotid) {
+                    return Response::Err(Error::NoSuchKey);
+                }
+
                 self.data.insert(
                     id,
-                    self.slots
-                        .get(slotid)
+                    bugon!("TpmLock no slot", self.slots
+                        .get(slotid))
                         .expect("Failed to get slot")
                         .to_owned(),
                 );
@@ -139,9 +223,14 @@ impl Handler {
                 let hash = self.hash(&data);
                 let mut mac = Vec::new();
                 mac.extend(hash.iter());
-                mac.extend(self.keys.get(uid).expect("Failed to get user key"));
+                mac.extend(bugon!("TpmUnlock no key", self.keys.get(uid)).expect("Failed to get user key"));
                 let id = self.hash(mac.as_slice());
-                *self.slots.get_mut(slotid).unwrap() = self.data.get(&id).unwrap().to_owned();
+
+                if !self.slots.contains_key(slotid) {
+                    return Response::Err(Error::NoSuchKey);
+                }
+
+                *bugon!("TpmUnlock no slot", self.slots.get_mut(slotid)).unwrap() = bugon!("TpmUnlock no data", self.data.get(&id)).unwrap().to_owned();
 
                 Response::Ok
             }

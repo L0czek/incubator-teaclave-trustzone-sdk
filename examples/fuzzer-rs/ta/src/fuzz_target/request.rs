@@ -2,12 +2,15 @@ use super::error::Error;
 use super::serialize::*;
 use std::convert::TryInto;
 use arbitrary::Arbitrary;
+use optee_utee::trace_println;
 
 pub type KeyType = [u8; 32];
 
 pub enum Request {
     UserLogin(String, String),
     UserRegister(String, String),
+    SetUserAttributes(usize, String),
+    GetUserAttributes(usize),
 
     SaveKeyForUser(usize, KeyType),
     GetKeyForUser(usize),
@@ -26,6 +29,8 @@ pub enum Request {
 enum RequestIds {
     UserLogin = 1,
     UserRegster = 2,
+    SetUserAttributes = 12,
+    GetUserAttributes = 13,
 
     SaveKeyForUser = 3,
     GetKeyForUser = 4,
@@ -75,6 +80,15 @@ impl Serialize for Request {
                 serializer.push_u32(RequestIds::UserRegster as u32);
                 serializer.push_string(login);
                 serializer.push_string(pass);
+            }
+            Request::SetUserAttributes(uid, attr) => {
+                serializer.push_u32(RequestIds::SetUserAttributes as u32);
+                serializer.push_usize(*uid);
+                serializer.push_string(attr);
+            }
+            Request::GetUserAttributes(uid) => {
+                serializer.push_u32(RequestIds::GetUserAttributes as u32);
+                serializer.push_usize(*uid);
             }
 
             Request::SaveKeyForUser(uid, key) => {
@@ -134,6 +148,8 @@ impl TryInto<RequestIds> for u32 {
         match self {
             x if x == RequestIds::UserLogin as u32 => Ok(RequestIds::UserLogin),
             x if x == RequestIds::UserRegster as u32 => Ok(RequestIds::UserRegster),
+            x if x == RequestIds::SetUserAttributes as u32 => Ok(RequestIds::SetUserAttributes),
+            x if x == RequestIds::GetUserAttributes as u32 => Ok(RequestIds::GetUserAttributes),
             x if x == RequestIds::SaveKeyForUser as u32 => Ok(RequestIds::SaveKeyForUser),
             x if x == RequestIds::GetKeyForUser as u32 => Ok(RequestIds::GetKeyForUser),
             x if x == RequestIds::AllocSlot as u32 => Ok(RequestIds::AllocSlot),
@@ -163,6 +179,13 @@ impl Deserialize for Request {
             RequestIds::UserRegster => Ok(Request::UserRegister(
                 deserializer.pop_string()?,
                 deserializer.pop_string()?,
+            )),
+            RequestIds::SetUserAttributes => Ok(Request::SetUserAttributes(
+                deserializer.pop_usize()?,
+                deserializer.pop_string()?
+            )),
+            RequestIds::GetUserAttributes => Ok(Request::GetUserAttributes(
+                deserializer.pop_usize()?
             )),
 
             RequestIds::SaveKeyForUser => Ok(Request::SaveKeyForUser(

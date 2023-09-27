@@ -5,7 +5,7 @@ extern crate quote;
 
 use proc_macro::TokenStream;
 use quote::{quote, TokenStreamExt};
-use syn::{parse_macro_input, ItemFn, Path, DeriveInput, parse::Parser, Ident, FnDecl};
+use syn::{parse_macro_input, ItemFn, Path, DeriveInput, parse::Parser, Ident};
 use tcgen::TcTracer;
 use crate::{generator::CodeGenerator, tcgen::{TcGenerator, TcgenCtorArgs}};
 
@@ -67,27 +67,14 @@ pub fn tcgen_record(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ItemFn {
         attrs,
         vis,
-        constness,
-        unsafety,
-        asyncness,
-        abi,
-        ident,
-        decl,
-        block,
+        sig,
+        block
     } = func;
 
-    let FnDecl {
-        generics,
-        inputs,
-        variadic,
-        output,
-        ..
-    } = &*decl.as_ref();
-
-    let name = format!("{}", ident);
+    let name = format!("{}", &sig.ident);
 
     quote! {
-        #(#attrs)* #vis #constness #unsafety #asyncness #abi fn #ident (#(#inputs),*) #output {
+        #(#attrs)* #vis #sig {
             TcAssembler::take().enter(#name);
             let mut __ret__ = { #block };
             TcAssembler::take().leave();
